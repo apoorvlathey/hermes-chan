@@ -144,5 +144,5 @@ pnpm tsx scripts/cdp.ts shot shot.png  # screenshot the running app over DevTool
 
 ## License
 
-HermesChan's own code has no license yet. `vendor/hermes-shared` is from Hermes Agent and keeps its MIT license
+[MIT](LICENSE). `vendor/hermes-shared` is from Hermes Agent and keeps its own MIT license
 (`vendor/hermes-shared/LICENSE`).
