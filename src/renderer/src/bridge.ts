@@ -2,6 +2,7 @@
  *  error message (contextBridge drops other error fields), and this turns it back into an Error that
  *  carries `code` / `data` again. Use this instead of `window.hermes` for anything that can fail. */
 import type { HermesBridge } from '../../shared/types'
+import { demoBridge, IS_DEMO } from './demo'
 
 export interface RpcError extends Error {
   code?: number
@@ -23,9 +24,12 @@ function revive(err: unknown): RpcError {
 
 const w = window.hermes
 
-export const hermes: HermesBridge = {
+const live: HermesBridge = {
   ...w,
   request: (botId, method, params) => w.request(botId, method, params).catch(e => Promise.reject(revive(e))),
   uploadImage: (botId, dataUrl, filename) => w.uploadImage(botId, dataUrl, filename).catch(e => Promise.reject(revive(e))),
   readDataUrl: (botId, filePath) => w.readDataUrl(botId, filePath).catch(e => Promise.reject(revive(e)))
 }
+
+/** `pnpm demo` swaps in a fake backend with made-up data (see demo.ts). */
+export const hermes: HermesBridge = IS_DEMO ? demoBridge(live) : live

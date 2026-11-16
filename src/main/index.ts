@@ -9,7 +9,12 @@ import { BotConnection } from './bots'
 import { CONFIG_PATH, loadConfig } from './config'
 import { closeTransports } from './transport'
 
-const config = loadConfig()
+/** `HERMESCHAN_DEMO=1` (pnpm demo): fake backend in the renderer, no gateway connections, and a
+ *  separate userData folder so demo unread/pin state never mixes with the real app's. */
+const DEMO = process.env.HERMESCHAN_DEMO === '1'
+if (DEMO) app.setPath('userData', path.join(os.homedir(), '.hermes-chan', 'demo-userdata'))
+
+const config = DEMO ? { bots: [] } : loadConfig()
 const bots = new Map<string, BotConnection>()
 let win: BrowserWindow | null = null
 
@@ -45,8 +50,8 @@ function createWindow() {
     }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void win.loadFile(path.join(import.meta.dirname, '../renderer/index.html'))
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${DEMO ? '?demo=1' : ''}`)
+  else void win.loadFile(path.join(import.meta.dirname, '../renderer/index.html'), DEMO ? { query: { demo: '1' } } : undefined)
 }
 
 function startBots() {

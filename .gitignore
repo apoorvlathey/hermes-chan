@@ -4,3 +4,4 @@ dist/
 *.png
 .DS_Store
 !build/icon.png
+!docs/screenshots/*.png
