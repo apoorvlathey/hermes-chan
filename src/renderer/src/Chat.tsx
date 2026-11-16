@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 
 import { Avatar } from './Avatar'
@@ -19,6 +20,7 @@ import {
   type ToolInfo
 } from './store'
 import { BotDayDivider, BotTime, localDay } from './botChat'
+import { CodeBlock } from './CodeBlock'
 import { hermes } from './bridge'
 import { ModelPicker } from './ModelPicker'
 import { clock } from './time'
@@ -74,14 +76,19 @@ function SessionChip({ id, profile, botId, children }: { id: string; profile?: s
   )
 }
 
+// Highlight only fences that name their language (no guessing on plain blocks); unknown names stay plain.
+const REHYPE: NonNullable<Parameters<typeof ReactMarkdown>[0]['rehypePlugins']> = [[rehypeHighlight, { detect: false }]]
+
 const Markdown = memo(function Markdown({ text, botId }: { text: string; botId: string }) {
   const source = useMemo(() => linkMentions(text), [text])
   return (
     <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={REHYPE}
         urlTransform={urlTransform}
         components={{
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           a: ({ href, children }) => {
             const ref = parseSessionLink(href)
             if (ref) {

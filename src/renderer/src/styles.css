@@ -1055,12 +1055,169 @@ kbd {
   font: 12.5px var(--mono);
 }
 
-.md pre {
+/* ─── code blocks: header (language + copy) and highlight.js colours ─── */
+
+.code-block {
+  margin: 0 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raise);
+}
+
+.code-lang {
+  font: 600 11px var(--round);
+  color: var(--text-3);
+}
+
+.code-copy {
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font: 500 11.5px var(--font);
+  color: var(--text-2);
+  user-select: none;
+  transition: background 0.15s, color 0.15s, transform 0.2s var(--spring);
+}
+
+.code-copy:hover {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+.code-copy:active {
+  transform: scale(0.94);
+}
+
+.code-copy.done {
+  color: var(--ok);
+}
+
+.md .code-block pre {
+  margin: 0;
   overflow-x: auto;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* Light palette, with dark overrides in the media query below. */
+:root {
+  --code-bg: #f6f3ee;
+  --hl-comment: #8a8394;
+  --hl-keyword: #a2368a;
+  --hl-string: #2f7a3e;
+  --hl-number: #b4560e;
+  --hl-title: #2b5fb8;
+  --hl-attr: #8a5a00;
+  --hl-type: #0f7a7a;
+  --hl-meta: #6c5fc7;
+  --hl-deletion: #c2304f;
+  --hl-addition: #2f7a3e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --code-bg: #141217;
+    --hl-comment: #7a7385;
+    --hl-keyword: #f0a6e0;
+    --hl-string: #a6e3a1;
+    --hl-number: #f8bd85;
+    --hl-title: #8fb8ff;
+    --hl-attr: #f2c14e;
+    --hl-type: #7fdbca;
+    --hl-meta: #b8a6ff;
+    --hl-deletion: #ff8fa3;
+    --hl-addition: #a6e3a1;
+  }
+}
+
+.hljs {
+  color: var(--text);
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: var(--hl-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-template-tag,
+.hljs-symbol {
+  color: var(--hl-string);
+}
+
+.hljs-number,
+.hljs-bullet,
+.hljs-variable.constant_ {
+  color: var(--hl-number);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+  color: var(--hl-title);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable,
+.hljs-params {
+  color: var(--hl-attr);
+}
+
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--hl-type);
+}
+
+.hljs-meta,
+.hljs-keyword.hljs-meta,
+.hljs-subst {
+  color: var(--hl-meta);
+}
+
+.hljs-deletion {
+  color: var(--hl-deletion);
+  background: color-mix(in srgb, var(--hl-deletion) 12%, transparent);
+}
+
+.hljs-addition {
+  color: var(--hl-addition);
+  background: color-mix(in srgb, var(--hl-addition) 12%, transparent);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
 }
 
 .md pre code {

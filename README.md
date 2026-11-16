@@ -35,6 +35,7 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
   files are staged into the session for the agent to read. Sent images show as thumbnails in history.
 - **Model picker per chat.** Switch model, reasoning effort and fast mode from the chat header. It shows only the
   providers you actually set up, with your Hermes Desktop favourites first.
+- **Readable code.** Syntax highlighting for fenced code, with the language and a Copy button on every block.
 - **Links between chats.** Session links a bot writes (`hermes://session/…`, `@session:…`) open right in the app.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
 

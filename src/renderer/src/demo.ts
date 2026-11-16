@@ -116,6 +116,15 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
     user('summarise what we learned about sleep this week', at(1, 22, 10)),
     bot('Three things stood out:\n\n- Consistent wake time matters more than bedtime\n- Morning light within 30 minutes helps\n- Late caffeine has a longer tail than it feels like', at(1, 22, 11))
   ],
+  ci: [
+    user('The integration tests keep timing out on a cold cache. Can you find out why?', minsAgo(60)),
+    tool('🔎', 'Search Files', 'beforeAll|setTimeout in tests/', minsAgo(59)),
+    tool('🖥️', 'Terminal', 'pnpm test --filter api -- --runInBand', minsAgo(57)),
+    bot(
+      "Found it. The suite warms the cache in `beforeAll` but never awaits it, so the first test races the warm-up:\n\n```ts\nbeforeAll(async () => {\n  // was: warmCache()  (fire-and-forget)\n  await warmCache({ timeoutMs: 15_000 })\n})\n\ntest('lists projects', async () => {\n  const res = await api.get('/projects')\n  expect(res.status).toBe(200)\n})\n```\n\nThe fix is one line:\n\n```diff\n- warmCache()\n+ await warmCache({ timeoutMs: 15_000 })\n```\n\nTo reproduce the cold-cache case locally:\n\n```bash\nrm -rf .cache/api && pnpm test --filter api -- --runInBand\n```\n\nTen runs in a row pass with the change.",
+      minsAgo(48)
+    )
+  ],
   hero: [
     user('Give me three hero headline options for a habit tracker app, and compare their tone.', minsAgo(9)),
     tool('🧠', 'Memory Search', 'brand voice notes', minsAgo(9)),
