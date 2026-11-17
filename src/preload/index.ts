@@ -34,6 +34,7 @@ const bridge: HermesBridge = {
   uploadImage: (botId, dataUrl, filename) => unwrap(ipcRenderer.invoke('hermes:upload-image', botId, dataUrl, filename)),
   readDataUrl: (botId, filePath) => unwrap(ipcRenderer.invoke('hermes:read-data-url', botId, filePath)),
   desktopModelPrefs: () => ipcRenderer.invoke('hermes:desktop-model-prefs'),
+  reconnect: botId => ipcRenderer.invoke('hermes:reconnect', botId),
   respond: (botId, id, result) => ipcRenderer.invoke('hermes:respond', botId, id, result),
   onEvent: listen('hermes:event'),
   onRequest: listen('hermes:request'),

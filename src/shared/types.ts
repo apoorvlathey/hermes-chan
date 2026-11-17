@@ -45,6 +45,8 @@ export interface HermesBridge {
   respond(botId: string, requestId: string, result: Record<string, unknown>): Promise<void>
   /** Store an image on the bot's gateway host; returns the gateway-visible path for `attachments`. */
   uploadImage(botId: string, dataUrl: string, filename: string): Promise<{ path: string; mime: string }>
+  /** Rebuild a bot's connection from scratch (or every offline bot when omitted). */
+  reconnect(botId?: string): Promise<void>
   /** Hermes Desktop's favourite models (`provider::model`) and per-model presets. */
   desktopModelPrefs(): Promise<{
     favorites: string[]

@@ -48,7 +48,9 @@ function sshBase(host: string) {
   return [
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',
-    '-o', 'ServerAliveInterval=15',
+    // Notice a dead link (sleep, Wi-Fi change) within ~20s instead of hanging on it.
+    '-o', 'ServerAliveInterval=10',
+    '-o', 'ServerAliveCountMax=2',
     '-o', 'ControlMaster=auto',
     '-o', `ControlPath=${controlPath(host)}`,
     '-o', 'ControlPersist=yes',
@@ -96,8 +98,23 @@ async function execAttach(t: Transport, start: boolean, recover: boolean): Promi
   }
 }
 
-/** remote port → local port, per host, so reconnects reuse the same forward. */
+/** remote port → local port, per host. Reused only while the tunnel still answers: when the SSH
+ *  master dies (sleep, network change) its forwards die with it and must be re-created. */
 const forwards = new Map<string, number>()
+
+/** Does anything accept connections on this local port (i.e. is the tunnel listener alive)? */
+function portAlive(port: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const sock = net.connect({ host: '127.0.0.1', port })
+    const done = (ok: boolean) => {
+      sock.destroy()
+      resolve(ok)
+    }
+    sock.setTimeout(1500, () => done(false))
+    sock.once('connect', () => done(true))
+    sock.once('error', () => done(false))
+  })
+}
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -114,7 +131,8 @@ function freePort(): Promise<number> {
 async function ensureForward(host: string, remotePort: number): Promise<number> {
   const key = `${host}:${remotePort}`
   const existing = forwards.get(key)
-  if (existing) return existing
+  if (existing && (await portAlive(existing))) return existing
+  forwards.delete(key)
   const local = await freePort()
   await run('ssh', ['-O', 'forward', '-L', `127.0.0.1:${local}:127.0.0.1:${remotePort}`, ...sshBase(host)], {
     timeout: 20_000
@@ -223,6 +241,13 @@ async function mintRemote(host: string, ep: Endpoint): Promise<string> {
 }
 
 export const mintHttpTicket = (t: Transport, ep: Endpoint) => (t.kind === 'ssh' ? mintRemote(t.host, ep) : mintLocal(ep))
+
+/** Hard reset for one host: forget its tunnels and close its SSH master, so the next connect
+ *  builds everything fresh (the manual "Reconnect" and wake-from-sleep path). */
+export async function resetHost(host: string) {
+  for (const key of [...forwards.keys()]) if (key.startsWith(`${host}:`)) forwards.delete(key)
+  await run('ssh', ['-O', 'exit', ...sshBase(host)], { timeout: 5000 }).catch(() => undefined)
+}
 
 /** Tear down SSH masters on quit (they're ControlPersist=yes otherwise). */
 export async function closeTransports(hosts: string[]) {

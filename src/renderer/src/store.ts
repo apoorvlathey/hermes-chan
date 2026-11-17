@@ -872,6 +872,12 @@ export function movePinned(key: string, index: number) {
   set(s => ({ pinOrder: [...current, ...s.pinOrder.filter(k => !current.includes(k))] }))
 }
 
+/** Rebuild a bot's connection from scratch (all offline bots when no id). */
+export function reconnectBot(botId?: string) {
+  if (botId) set(s => ({ statuses: { ...s.statuses, [botId]: { botId, state: 'connecting', detail: 'Reconnecting…' } } }))
+  return hermes.reconnect(botId).catch(err => console.warn('reconnect failed', err))
+}
+
 export function toggleRoutine() {
   savePrefs({ showRoutine: !state.showRoutine })
   set(s => ({ showRoutine: !s.showRoutine }))
@@ -893,9 +899,22 @@ export async function boot() {
   hermes.onEvent(onEvent)
   hermes.onRequest(onServerRequest)
   hermes.onStatus(st => {
+    const was = state.statuses[st.botId]?.state
     set(s => ({ statuses: { ...s.statuses, [st.botId]: st } }))
-    if (st.state === 'ready') scheduleRefresh(st.botId, 50)
+    if (st.state === 'ready') {
+      scheduleRefresh(st.botId, 50)
+      // Back after a drop: a new socket has no session subscriptions, so re-open this bot's loaded
+      // chats to get live replies (and anything that arrived while offline).
+      if (was && was !== 'ready') {
+        for (const t of Object.values(state.threads)) {
+          if (t.botId === st.botId && t.liveId) void attach(t.key, t.botId, t.liveId)
+        }
+      }
+    }
   })
+
+  // The network came back: retry anything offline right away instead of waiting on backoff.
+  window.addEventListener('online', () => void hermes.reconnect().catch(() => undefined))
 
   for (const b of config.bots) if (statuses[b.id]?.state === 'ready') scheduleRefresh(b.id, 50)
   setInterval(() => config.bots.forEach(b => scheduleRefresh(b.id, 0)), 45_000)

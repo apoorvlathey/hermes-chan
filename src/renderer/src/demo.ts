@@ -289,6 +289,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     statuses: async () => statuses,
     request,
     respond: async () => undefined,
+    reconnect: async () => undefined,
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
     readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),
     desktopModelPrefs: async () => ({ favorites: ['anthropic::claude-opus-5.5', 'openai-codex::gpt-6.1-sol'], presets: {} }),

@@ -2,7 +2,21 @@
 import { GatewayClient } from '../../vendor/hermes-shared/node/gateway-client'
 import type { ServerRequest } from '../../vendor/hermes-shared/json-rpc-channel'
 import type { BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
-import { connectGateway, type Endpoint, mintHttpTicket } from './transport'
+import { connectGateway, type Endpoint, mintHttpTicket, resetHost } from './transport'
+
+/** One line a person can act on, from an ssh / attach / socket failure. */
+function friendlyError(err: unknown): string {
+  const e = err as { message?: string; stderr?: string; code?: string | number }
+  const text = `${e?.stderr ?? ''} ${e?.message ?? ''}`
+  if (/Could not resolve hostname|Name or service not known/i.test(text)) return "Can't find the server (no internet?)"
+  if (/timed out|ETIMEDOUT|Operation timed out/i.test(text)) return 'The server is not answering'
+  if (/Connection refused|ECONNREFUSED/i.test(text)) return 'Connection refused'
+  if (/Permission denied|publickey/i.test(text)) return 'SSH key was refused'
+  if (/Network is unreachable|ENETUNREACH|No route to host/i.test(text)) return 'No network'
+  if (/gateway not ready/i.test(text)) return (e.message ?? '').replace(/^Error:\s*/, '')
+  const first = (e?.stderr || e?.message || String(err)).split('\n').find(l => l.trim()) ?? 'Connection failed'
+  return first.slice(0, 160)
+}
 
 interface Sinks {
   event: (e: GatewayEventEnvelope) => void
@@ -11,49 +25,95 @@ interface Sinks {
 }
 
 export class BotConnection {
-  readonly gw: GatewayClient
+  gw!: GatewayClient
   status: BotStatus
   endpoint: Endpoint | null = null
   private pending = new Map<string, ServerRequest>()
+  private lastError: string | undefined
+  private reconnecting: Promise<void> | null = null
 
   constructor(readonly bot: BotConfig, private sinks: Sinks) {
     this.status = { botId: bot.id, state: 'connecting' }
-    this.gw = new GatewayClient({
+    this.build()
+  }
+
+  /** A fresh gateway client. Handlers ignore events from a client that has since been replaced. */
+  private build() {
+    const bot = this.bot
+    const gw = new GatewayClient({
       connect: async (start, recover) => {
-        const conn = await connectGateway(bot.transport, start, recover)
-        this.endpoint = conn.endpoint
-        return conn
+        try {
+          const conn = await connectGateway(bot.transport, start, recover)
+          this.endpoint = conn.endpoint
+          this.lastError = undefined
+          return conn
+        } catch (err) {
+          // Shown in the UI while the client keeps retrying on its own backoff.
+          this.lastError = friendlyError(err)
+          if (gw === this.gw && this.status.state !== 'connecting') this.setStatus('reconnecting', this.lastError)
+          throw err
+        }
       },
       source: 'tui',
       client: { name: 'hermes-chan', version: '0.1.0' },
       onLifecycle: line => console.log(`[${bot.id}] ${line}`)
     })
+    this.gw = gw
 
-    this.gw.on('event', (event: GatewayEventEnvelope['event']) => {
+    gw.on('event', (event: GatewayEventEnvelope['event']) => {
+      if (gw !== this.gw) return
       if (event.type === 'gateway.ready') {
         // Advertise that we answer approval / clarify prompts; without it the gateway treats this
         // socket as a client that can't, and routes them elsewhere.
-        void this.gw.request('client.capabilities', { server_requests: true }).catch(() => undefined)
+        void gw.request('client.capabilities', { server_requests: true }).catch(() => undefined)
         this.setStatus('ready')
-      } else if (event.type === 'gateway.start_timeout' || event.type === 'gateway.stderr') {
-        // Surface but keep going; the client retries on its own.
+      } else if (event.type === 'gateway.reconnecting') {
+        const attempt = (event.payload as { attempt?: number } | undefined)?.attempt
+        this.setStatus('reconnecting', this.lastError ?? (attempt ? `Retrying (attempt ${attempt})` : undefined))
+      } else if (event.type === 'gateway.start_timeout') {
+        this.setStatus('error', this.lastError ?? 'The gateway did not start in time')
       } else if (event.type === 'gateway.exit' || event.type === 'gateway.disconnected') {
-        this.setStatus('reconnecting')
+        this.setStatus('reconnecting', this.lastError)
       }
       this.sinks.event({ botId: bot.id, event })
     })
 
-    this.gw.on('request', (req: ServerRequest) => {
+    gw.on('request', (req: ServerRequest) => {
+      if (gw !== this.gw) return
       this.pending.set(req.id, req)
       this.sinks.request({ botId: bot.id, id: req.id, method: req.method, params: req.params })
     })
 
-    this.gw.on('exit', () => this.setStatus('reconnecting'))
+    gw.on('exit', () => {
+      if (gw === this.gw) this.setStatus('reconnecting', this.lastError)
+    })
   }
 
   start() {
     this.gw.start()
     this.gw.drain()
+  }
+
+  /** Throw away the client (and, for SSH bots, the SSH master and tunnels) and dial again from
+   *  scratch. Safe to call repeatedly; concurrent calls share one attempt. */
+  reconnect(): Promise<void> {
+    if (this.reconnecting) return this.reconnecting
+    this.reconnecting = (async () => {
+      this.setStatus('connecting', 'Reconnecting…')
+      const old = this.gw
+      this.pending.clear()
+      try {
+        old.kill('reconnect')
+      } catch {
+        /* already gone */
+      }
+      if (this.bot.transport.kind === 'ssh') await resetHost(this.bot.transport.host)
+      this.build()
+      this.start()
+    })().finally(() => {
+      this.reconnecting = null
+    })
+    return this.reconnecting
   }
 
   async request(method: string, params: Record<string, unknown> = {}) {

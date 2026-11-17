@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, shell } from 'electron'
 
 import type { BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection } from './bots'
@@ -113,6 +113,15 @@ ipcMain.handle('hermes:desktop-model-prefs', () => {
 ipcMain.handle('hermes:respond', (_e, botId: string, id: string, result: Record<string, unknown>) => {
   bots.get(botId)?.respond(id, result)
 })
+/** Reconnect one bot, or every bot that isn't online. */
+const reconnect = (botId?: string) =>
+  Promise.all(
+    [...bots.values()]
+      .filter(b => (botId ? b.bot.id === botId : b.status.state !== 'ready'))
+      .map(b => b.reconnect())
+  ).then(() => undefined)
+
+ipcMain.handle('hermes:reconnect', (_e, botId?: string) => reconnect(botId))
 ipcMain.on('hermes:open-external', (_e, url: string) => {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url)
 })
@@ -124,6 +133,10 @@ nativeTheme.themeSource = 'system'
 const ICON_PATH = path.join(import.meta.dirname, '../../build/icon.png')
 
 app.whenReady().then(() => {
+  // After sleep or a lock, SSH links are usually dead; rebuild the ones that didn't come back.
+  const nudge = () => setTimeout(() => void reconnect(), 3000)
+  powerMonitor.on('resume', nudge)
+  powerMonitor.on('unlock-screen', nudge)
   // Without a packaged bundle the Dock shows Electron's icon; set ours.
   if (process.platform === 'darwin' && existsSync(ICON_PATH)) app.dock?.setIcon(ICON_PATH)
   startBots()

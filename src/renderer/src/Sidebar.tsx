@@ -11,6 +11,7 @@ import {
   openBot,
   openSession,
   pinnedSessions,
+  reconnectBot,
   setPinned,
   setSearch,
   toggleRoutine,
@@ -236,15 +237,26 @@ function ConnectionPill() {
   if (!config) return null
   const states = config.bots.map(b => statuses[b.id]?.state ?? 'connecting')
   const ready = states.filter(s => s === 'ready').length
+  const busy = states.some(s => s === 'connecting')
   const tone = ready === states.length ? 'ok' : ready === 0 ? 'down' : 'partial'
-  const label = tone === 'ok' ? 'All bots online' : tone === 'down' ? 'Connecting…' : `${ready}/${states.length} online`
+  const offline = config.bots.filter(b => (statuses[b.id]?.state ?? 'connecting') !== 'ready').map(b => b.name ?? b.id)
+  const label =
+    tone === 'ok' ? 'All bots online' : busy && ready === 0 ? 'Connecting…' : offline.length === 1 ? `${offline[0]} offline` : `${offline.length} bots offline`
   const detail = config.bots
-    .map(b => `${b.name ?? b.id}: ${statuses[b.id]?.state ?? 'connecting'} (${b.transport.kind === 'ssh' ? b.transport.host : 'this Mac'})`)
+    .map(b => {
+      const st = statuses[b.id]
+      return `${b.name ?? b.id}: ${st?.state ?? 'connecting'}${st?.detail ? ` (${st.detail})` : ''} via ${b.transport.kind === 'ssh' ? b.transport.host : 'this Mac'}`
+    })
     .join('\n')
   return (
     <div className={`conn conn-${tone}`} title={detail}>
       <span className="conn-dot" />
-      {label}
+      <span className="conn-label">{label}</span>
+      {tone !== 'ok' && (
+        <button className="conn-retry" onClick={() => void reconnectBot()} disabled={busy} title="Reconnect offline bots">
+          {busy ? <span className="session-spinner" /> : '↻'} Reconnect
+        </button>
+      )}
     </div>
   )
 }

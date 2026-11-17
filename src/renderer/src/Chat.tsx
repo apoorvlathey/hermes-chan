@@ -9,6 +9,7 @@ import {
   findSession,
   focusedKey,
   openSessionRef,
+  reconnectBot,
   send,
   setNewChatBot,
   stop,
@@ -515,6 +516,30 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
   )
 }
 
+/** Shown above the composer while the bot's connection is down, with a one-click Reconnect. */
+function OfflineBanner({ bot }: { bot: Bot }) {
+  const st = useStore(s => s.statuses[bot.id])
+  const working = st?.state === 'connecting'
+  const where = useStore(s => {
+    const t = s.config?.bots.find(b => b.id === bot.id)?.transport
+    return t?.kind === 'ssh' ? t.host : 'this Mac'
+  })
+  return (
+    <div className={`offline-banner ${working ? 'working' : ''}`} role="status">
+      <span className="offline-dot" />
+      <span className="offline-text">
+        <b>{working ? `Connecting to ${bot.name}…` : `${bot.name} is offline`}</b>
+        <span className="offline-detail">
+          {st?.detail && st.detail !== 'Reconnecting…' ? st.detail : working ? where : `Can't reach ${where}. It keeps retrying on its own.`}
+        </span>
+      </span>
+      <button className="offline-btn" onClick={() => void reconnectBot(bot.id)} disabled={working}>
+        {working ? <span className="session-spinner" /> : '↻'} {working ? 'Connecting' : 'Reconnect'}
+      </button>
+    </div>
+  )
+}
+
 function NewChatPicker({ botId }: { botId: string }) {
   const config = useStore(s => s.config)
   const bots = useStore(s => s.bots)
@@ -661,6 +686,7 @@ export function Chat() {
         </div>
       </div>
 
+      {status && status !== 'ready' && <OfflineBanner bot={bot} />}
       <Composer bot={bot} running={!!thread?.running} disabled={status !== 'ready'} />
     </div>
   )
