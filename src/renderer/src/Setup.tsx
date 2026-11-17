@@ -25,51 +25,6 @@ const DOCS = 'https://hermes-agent.nousresearch.com/docs/'
 /** Only keep a custom binary path when it isn't where HermesChan looks by default. */
 const customPath = (p: string | null | undefined) => (p && !/\/\.local\/bin\/hermes$/.test(p) ? p : undefined)
 
-function Check({ on }: { on: boolean }) {
-  return <span className={`su-check ${on ? 'on' : ''}`}>{on ? '✓' : ''}</span>
-}
-
-function ScanLine({ status, scan, what }: { status: Status; scan?: SetupScan; what: string }) {
-  if (status === 'scanning')
-    return (
-      <div className="su-status">
-        <span className="session-spinner" /> Looking for Hermes {what}…
-      </div>
-    )
-  if (!scan) return null
-  if (scan.ok)
-    return (
-      <div className="su-status ok">
-        <span className="su-dot ok" />
-        {scan.version ?? 'Hermes Agent'} · {scan.profiles.length} profile{scan.profiles.length === 1 ? '' : 's'}
-      </div>
-    )
-  return (
-    <div className="su-status bad">
-      <span className="su-dot bad" />
-      <span>
-        <b>{scan.error}</b>
-        {scan.hint && (
-          <span className="su-hint">
-            {scan.hint.includes('nousresearch.com') ? (
-              <>
-                Install Hermes Agent first:{' '}
-                <a onClick={() => window.hermes.openExternal(DOCS)}>hermes-agent.nousresearch.com/docs</a>
-              </>
-            ) : (
-              renderCode(scan.hint)
-            )}
-          </span>
-        )}
-      </span>
-    </div>
-  )
-}
-
-/** `backticks` in hints render as code. */
-const renderCode = (text: string) =>
-  text.split(/(`[^`]+`)/).map((part, i) => (part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : <span key={i}>{part}</span>))
-
 export function Setup({ firstRun }: { firstRun: boolean }) {
   const config = useStore(s => s.config)
   const existing = config?.bots ?? []
@@ -110,6 +65,13 @@ export function Setup({ firstRun }: { firstRun: boolean }) {
     for (const h of hosts) void scanHost(h.host)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (firstRun) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeSetup()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [firstRun])
 
   const addHost = () => {
     const host = hostInput.trim()
@@ -166,147 +128,393 @@ export function Setup({ firstRun }: { firstRun: boolean }) {
     setSaving(false)
   }
 
-  const ProfileList = ({ prefix, profiles, note }: { prefix: string; profiles: string[]; note?: (p: string) => string | undefined }) =>
-    profiles.length ? (
-      <div className="su-profiles">
-        {profiles.map(p => {
-          const k = `${prefix}:${p}`
-          return (
-            <button key={k} className={`su-profile ${selected[k] ? 'on' : ''}`} onClick={() => toggle(k)}>
-              <Check on={!!selected[k]} />
-              <span className="su-profile-name">{p}</span>
-              <span className="su-profile-note">{note?.(p) ?? (p === 'default' ? 'main profile' : 'profile')}</span>
-            </button>
-          )
-        })}
-      </div>
-    ) : null
 
-  const unseenLocal = existing.filter(b => b.transport.kind === 'local' && !(local.scan?.profiles ?? []).includes(b.transport.profile)).map(b => b.transport.profile)
+  const looks = useLooks()
+  const unseenLocal = existing
+    .filter(b => b.transport.kind === 'local' && !(local.scan?.profiles ?? []).includes(b.transport.profile))
+    .map(b => b.transport.profile)
+  const localProfiles = [...(local.scan?.profiles ?? []), ...unseenLocal]
 
   return (
     <div className={`setup ${firstRun ? 'first' : 'manage'}`}>
-      <div className="titlebar-drag" />
-      <div className="su-panel">
-        <header className="su-head">
-          {firstRun && <img className="su-logo" src="./icon.png" alt="" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />}
-          <h1>{firstRun ? 'Welcome to HermesChan' : 'Your bots'}</h1>
-          <p>
-            {firstRun
-              ? 'Let’s find your Hermes. Pick the profiles you want to chat with; each one becomes a bot in the sidebar.'
-              : 'Add or remove bots. Each Hermes profile you tick shows up in the sidebar.'}
-          </p>
+      {firstRun ? (
+        <div className="titlebar-drag" />
+      ) : (
+        <header className="su-bar">
+          <div>
+            <div className="su-bar-title">Bots</div>
+            <div className="su-bar-sub">Each Hermes profile you select becomes a bot in the sidebar.</div>
+          </div>
+          <button className="su-icon-btn" onClick={closeSetup} aria-label="Close" title="Close (Esc)">
+            <Icon.X />
+          </button>
         </header>
+      )}
 
-        <section className="su-card">
-          <div className="su-card-head">
-            <span className="su-emoji">💻</span>
-            <div>
-              <h2>On this Mac</h2>
-              <ScanLine status={local.status} scan={local.scan} what="on this Mac" />
-            </div>
-            {local.status === 'done' && (
-              <button className="su-ghost" onClick={() => void scanLocal()}>
-                Scan again
-              </button>
-            )}
-          </div>
-          <ProfileList prefix="local" profiles={[...(local.scan?.profiles ?? []), ...unseenLocal]} />
-        </section>
-
-        <section className="su-card">
-          <div className="su-card-head">
-            <span className="su-emoji">🌐</span>
-            <div>
-              <h2>On a server</h2>
-              <div className="su-status">Over SSH with your keys. Nothing gets installed on the server.</div>
-            </div>
-          </div>
-
-          <form
-            className="su-add"
-            onSubmit={e => {
-              e.preventDefault()
-              addHost()
-            }}
-          >
-            <input
-              list="su-hosts"
-              placeholder={suggestions[0] ? `Host from ~/.ssh/config, e.g. ${suggestions[0]}` : 'SSH host, e.g. my-server or user@1.2.3.4'}
-              value={hostInput}
-              onChange={e => setHostInput(e.target.value)}
-              spellCheck={false}
-            />
-            <datalist id="su-hosts">
-              {suggestions.map(h => (
-                <option key={h} value={h} />
-              ))}
-            </datalist>
-            <button className="su-btn" type="submit" disabled={!hostInput.trim()}>
-              Connect
-            </button>
-          </form>
-          {suggestions.length > 0 && !hosts.length && (
-            <div className="su-suggest">
-              {suggestions.slice(0, 6).map(h => (
-                <button key={h} className="su-chip" onClick={() => void scanHost(h)}>
-                  {h}
-                </button>
-              ))}
-            </div>
+      <div className="su-scroll">
+        <div className="su-body">
+          {firstRun && (
+            <header className="su-hero">
+              <img className="su-logo" src="./icon.png" alt="" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />
+              <h1>Welcome to HermesChan</h1>
+              <p>Connect the Hermes you already run. Choose the profiles you want to chat with; each becomes a bot in your sidebar.</p>
+            </header>
           )}
 
-          {hosts.map(h => (
-            <div key={h.host} className="su-host">
-              <div className="su-host-head">
-                <span className="su-host-name">{h.host}</span>
-                <ScanLine status={h.status} scan={h.scan} what={`on ${h.host}`} />
-                {h.status === 'done' && (
+          <Section
+            icon={<Icon.Laptop />}
+            title="This Mac"
+            caption="Profiles found in ~/.hermes"
+            badge={<ScanBadge status={local.status} scan={local.scan} />}
+            action={
+              local.status === 'done' ? (
+                <button className="su-icon-btn" onClick={() => void scanLocal()} aria-label="Scan again" title="Scan again">
+                  <Icon.Refresh />
+                </button>
+              ) : null
+            }
+          >
+            {local.status === 'scanning' ? (
+              <SkeletonCards />
+            ) : local.scan && !local.scan.ok ? (
+              <Problem scan={local.scan} />
+            ) : (
+              <ProfileGrid
+                items={localProfiles.map(p => ({ key: `local:${p}`, name: p, detail: p === 'default' ? '~/.hermes' : `profiles/${p}`, label: p === 'default' ? 'Hermes' : p }))}
+                selected={selected}
+                onToggle={toggle}
+                looks={looks}
+              />
+            )}
+          </Section>
+
+          <Section icon={<Icon.Server />} title="Servers" caption="Over SSH with your keys. Nothing is installed on the server.">
+            <form
+              className="su-field"
+              onSubmit={e => {
+                e.preventDefault()
+                addHost()
+              }}
+            >
+              <span className="su-field-prefix">ssh</span>
+              <input
+                list="su-hosts"
+                placeholder="host or user@address"
+                value={hostInput}
+                onChange={e => setHostInput(e.target.value)}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+              <datalist id="su-hosts">
+                {suggestions.map(h => (
+                  <option key={h} value={h} />
+                ))}
+              </datalist>
+              <button className="su-btn" type="submit" disabled={!hostInput.trim()}>
+                Check
+              </button>
+            </form>
+
+            {suggestions.filter(h => !hosts.some(x => x.host === h)).length > 0 && (
+              <div className="su-suggest">
+                <span className="su-suggest-label">From ~/.ssh/config</span>
+                {suggestions
+                  .filter(h => !hosts.some(x => x.host === h))
+                  .slice(0, 6)
+                  .map(h => (
+                    <button key={h} className="su-chip" onClick={() => void scanHost(h)}>
+                      <Icon.Plus /> {h}
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {hosts.map(h => (
+              <div key={h.host} className="su-host">
+                <div className="su-host-head">
+                  <span className="su-host-name">{h.host}</span>
+                  <ScanBadge status={h.status} scan={h.scan} />
                   <span className="su-host-actions">
-                    {!h.scan?.ok && (
-                      <button className="su-ghost" onClick={() => void scanHost(h.host)}>
-                        Try again
+                    {h.status === 'done' && !h.scan?.ok && (
+                      <button className="su-text-btn" onClick={() => void scanHost(h.host)}>
+                        Retry
                       </button>
                     )}
                     <button
-                      className="su-ghost"
+                      className="su-icon-btn small"
+                      aria-label={`Remove ${h.host}`}
+                      title="Remove"
                       onClick={() => {
                         setHosts(hs => hs.filter(x => x.host !== h.host))
                         setSelected(s => Object.fromEntries(Object.entries(s).filter(([k]) => !k.startsWith(`ssh:${h.host}:`))))
                       }}
                     >
-                      Remove
+                      <Icon.X />
                     </button>
                   </span>
+                </div>
+                {h.status === 'scanning' ? (
+                  <SkeletonCards n={1} />
+                ) : h.scan && !h.scan.ok ? (
+                  <Problem scan={h.scan} />
+                ) : (
+                  <ProfileGrid
+                    items={(h.scan?.profiles ?? []).map(p => ({
+                      key: `ssh:${h.host}:${p}`,
+                      name: p,
+                      detail: p === 'default' ? '~/.hermes' : `profiles/${p}`,
+                      label: p === 'default' ? h.host : p
+                    }))}
+                    selected={selected}
+                    onToggle={toggle}
+                    looks={looks}
+                  />
                 )}
               </div>
-              <ProfileList prefix={`ssh:${h.host}`} profiles={h.scan?.profiles ?? []} />
-            </div>
-          ))}
-        </section>
+            ))}
+          </Section>
+        </div>
       </div>
 
       <footer className="su-foot">
-        <span className="su-count">
-          {nextBots.length ? `${nextBots.length} bot${nextBots.length === 1 ? '' : 's'} selected` : 'Tick at least one profile'}
-        </span>
-        {!firstRun && (
-          <button className="su-ghost" onClick={closeSetup}>
-            Cancel
-          </button>
-        )}
-        <button className="su-btn primary" disabled={!nextBots.length || saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <span className="session-spinner" /> Connecting…
-            </>
-          ) : firstRun ? (
-            'Start chatting →'
-          ) : (
-            'Save'
+        <SidebarPreview bots={nextBots} looks={looks} />
+        <div className="su-foot-actions">
+          {!firstRun && (
+            <button className="su-btn ghost" onClick={closeSetup}>
+              Cancel
+            </button>
           )}
-        </button>
+          <button className="su-btn primary" disabled={!nextBots.length || saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <span className="su-spin" /> Connecting
+              </>
+            ) : firstRun ? (
+              <>
+                Start chatting <Icon.Arrow />
+              </>
+            ) : (
+              'Save changes'
+            )}
+          </button>
+        </div>
       </footer>
     </div>
   )
+}
+
+// ─── pieces ────────────────────────────────────────────────────────────────────────────────────
+
+/** A stable on-palette colour for a profile with no Bot Mode colour yet (FNV-1a over its key). */
+const HUES = [45, 210, 330, 158, 275, 18, 190, 95]
+export const colorFor = (key: string) => {
+  let h = 0x811c9dc5
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
+  return `hsl(${HUES[h % HUES.length]} 72% 63%)`
+}
+
+/** How an existing bot looks in the sidebar (real avatar, colour, display name), if we know it. */
+type Look = { name: string; color: string; avatar?: string }
+function useLooks(): Record<string, Look> {
+  const config = useStore(s => s.config)
+  const bots = useStore(s => s.bots)
+  return useMemo(() => {
+    const out: Record<string, Look> = {}
+    for (const b of config?.bots ?? []) {
+      const live = bots[b.id]
+      out[keyOf(b)] = { name: live?.name ?? b.name ?? b.id, color: live?.color ?? b.color ?? colorFor(keyOf(b)), avatar: live?.avatar }
+    }
+    return out
+  }, [config, bots])
+}
+const initials = (name: string) =>
+  name
+    .split(/[\s\-_.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0]!.toUpperCase())
+    .join('') || '?'
+
+function Tile({ name, color, avatar, size = 36 }: { name: string; color: string; avatar?: string; size?: number }) {
+  return (
+    <span className="su-tile" style={{ width: size, height: size, fontSize: size * 0.38, background: color }}>
+      {avatar ? <img src={avatar} alt="" /> : initials(name)}
+    </span>
+  )
+}
+
+function Section({
+  icon,
+  title,
+  caption,
+  badge,
+  action,
+  children
+}: {
+  icon: React.ReactNode
+  title: string
+  caption: string
+  badge?: React.ReactNode
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="su-section">
+      <div className="su-section-head">
+        <span className="su-section-icon">{icon}</span>
+        <div className="su-section-text">
+          <div className="su-section-title">
+            {title}
+            {badge}
+          </div>
+          <div className="su-section-caption">{caption}</div>
+        </div>
+        {action}
+      </div>
+      <div className="su-section-body">{children}</div>
+    </section>
+  )
+}
+
+function ScanBadge({ status, scan }: { status: Status; scan?: SetupScan }) {
+  if (status === 'scanning')
+    return (
+      <span className="su-badge">
+        <span className="su-spin" /> Checking
+      </span>
+    )
+  if (!scan) return null
+  if (!scan.ok) return <span className="su-badge bad">Needs attention</span>
+  const v = scan.version?.match(/v[\w.-]+/)?.[0]
+  return (
+    <span className="su-badge ok">
+      <Icon.Check /> Found{v ? ` · ${v}` : ''}
+    </span>
+  )
+}
+
+function ProfileGrid({
+  items,
+  selected,
+  onToggle,
+  looks
+}: {
+  items: { key: string; name: string; detail: string; label: string }[]
+  selected: Record<string, boolean>
+  onToggle: (k: string) => void
+  looks: Record<string, Look>
+}) {
+  return (
+    <div className="su-grid">
+      {items.map(it => {
+        const on = !!selected[it.key]
+        return (
+          <button key={it.key} className={`su-card ${on ? 'on' : ''}`} onClick={() => onToggle(it.key)} aria-pressed={on}>
+            <Tile name={looks[it.key]?.name ?? it.label} color={looks[it.key]?.color ?? colorFor(it.key)} avatar={looks[it.key]?.avatar} />
+            <span className="su-card-text">
+              <span className="su-card-name">{looks[it.key]?.name ?? it.name}</span>
+              <span className="su-card-detail">{it.detail}</span>
+            </span>
+            <span className={`su-tick ${on ? 'on' : ''}`}>{on && <Icon.Check />}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SkeletonCards({ n = 2 }: { n?: number }) {
+  return (
+    <div className="su-grid">
+      {Array.from({ length: n }, (_, i) => (
+        <div key={i} className="su-card skeleton">
+          <span className="su-tile shimmer-box" style={{ width: 36, height: 36 }} />
+          <span className="su-card-text">
+            <span className="su-skel-line shimmer-box" style={{ width: '60%' }} />
+            <span className="su-skel-line shimmer-box" style={{ width: '40%' }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A failed scan: what happened, and the one thing to do about it (copyable when it's a command). */
+function Problem({ scan }: { scan: SetupScan }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="su-problem">
+      <Icon.Alert />
+      <div className="su-problem-text">
+        <div className="su-problem-title">{scan.error}</div>
+        {scan.hint && <div className="su-problem-hint">{scan.hint}</div>}
+        {(scan.command || scan.install) && (
+          <div className="su-problem-actions">
+            {scan.command && (
+              <button
+                className="su-code"
+                onClick={() => {
+                  void navigator.clipboard.writeText(scan.command!)
+                  setCopied(true)
+                  window.setTimeout(() => setCopied(false), 1400)
+                }}
+                title="Copy"
+              >
+                <code>{scan.command}</code>
+                <span className="su-code-copy">{copied ? <Icon.Check /> : <Icon.Copy />}</span>
+              </button>
+            )}
+            {scan.install && (
+              <button className="su-text-btn" onClick={() => window.hermes.openExternal(DOCS)}>
+                Install guide <Icon.External />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** What the sidebar will look like with the current selection. */
+function SidebarPreview({ bots, looks }: { bots: BotConfig[]; looks: Record<string, Look> }) {
+  const nameOf = (b: BotConfig) => looks[keyOf(b)]?.name ?? b.name ?? b.id
+  return (
+    <div className="su-preview" aria-label="Sidebar preview">
+      <div className="su-preview-tiles">
+        {bots.slice(0, 6).map((b, i) => (
+          <span key={b.id} className="su-preview-tile" style={{ animationDelay: `${i * 30}ms` }}>
+            <Tile name={nameOf(b)} color={looks[keyOf(b)]?.color ?? b.color ?? colorFor(keyOf(b))} avatar={looks[keyOf(b)]?.avatar} size={30} />
+          </span>
+        ))}
+        {bots.length === 0 && <span className="su-preview-empty" />}
+      </div>
+      <div className="su-preview-text">
+        <b>{bots.length ? `${bots.length} bot${bots.length === 1 ? '' : 's'}` : 'No bots yet'}</b>
+        <span>{bots.length ? bots.map(nameOf).slice(0, 3).join(', ') + (bots.length > 3 ? '…' : '') : 'Select at least one profile'}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── icons (1.6px line set) ────────────────────────────────────────────────────────────────────
+
+const svg = (d: React.ReactNode, size = 16) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {d}
+  </svg>
+)
+
+const Icon = {
+  Laptop: () => svg(<><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M2 19h20" /></>, 18),
+  Server: () => svg(<><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 7.5h.01M7 16.5h.01" /></>, 18),
+  Refresh: () => svg(<><path d="M20 11a8 8 0 0 0-14.9-3.5M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.9 3.5M20 20v-4h-4" /></>),
+  Check: () => svg(<path d="M5 12.5l4.5 4.5L19 7.5" />, 14),
+  X: () => svg(<path d="M6 6l12 12M18 6L6 18" />),
+  Plus: () => svg(<path d="M12 5v14M5 12h14" />, 12),
+  Arrow: () => svg(<path d="M5 12h14M13 6l6 6-6 6" />),
+  Alert: () => svg(<><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" /></>, 18),
+  Copy: () => svg(<><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>, 14),
+  External: () => svg(<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />, 13)
 }

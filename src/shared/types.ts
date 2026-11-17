@@ -48,8 +48,12 @@ export interface SetupScan {
   /** Profile names on disk ("default" plus ~/.hermes/profiles/*). */
   profiles: string[]
   error?: string
-  /** What to do about the error, in one line. */
+  /** What to do about the error, in one sentence. */
   hint?: string
+  /** A command that fixes it, shown copyable. */
+  command?: string
+  /** Offer the Hermes Agent install guide. */
+  install?: boolean
 }
 
 export interface HermesBridge {

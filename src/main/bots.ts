@@ -8,7 +8,7 @@ import { connectGateway, type Endpoint, mintHttpTicket, resetHost } from './tran
 export function friendlyError(err: unknown): string {
   const e = err as { message?: string; stderr?: string; code?: string | number }
   const text = `${e?.stderr ?? ''} ${e?.message ?? ''}`
-  if (/Could not resolve hostname|Name or service not known/i.test(text)) return "Can't find the server (no internet?)"
+  if (/Could not resolve hostname|Name or service not known/i.test(text)) return "Can't find this server"
   if (/timed out|ETIMEDOUT|Operation timed out/i.test(text)) return 'The server is not answering'
   if (/Connection refused|ECONNREFUSED/i.test(text)) return 'Connection refused'
   if (/Permission denied|publickey/i.test(text)) return 'SSH key was refused'

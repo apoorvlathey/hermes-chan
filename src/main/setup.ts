@@ -40,7 +40,6 @@ function parseProbe(out: string): Omit<SetupScan, 'ok' | 'error' | 'hint'> {
   return { hermes, version, profiles: [...new Set(profiles)] }
 }
 
-const INSTALL_HINT = 'Install Hermes Agent first: hermes-agent.nousresearch.com/docs'
 
 /** This Mac. Runs the probe in a login shell so a Finder-launched app sees the user's PATH. */
 export async function scanLocal(): Promise<SetupScan> {
@@ -48,8 +47,10 @@ export async function scanLocal(): Promise<SetupScan> {
   try {
     const { stdout } = await run(shell, ['-lc', PROBE], { timeout: 20_000 })
     const r = parseProbe(stdout)
-    if (!r.hermes) return { ok: false, ...r, error: 'Hermes isn’t installed on this Mac', hint: INSTALL_HINT }
-    if (!r.profiles.length) return { ok: false, ...r, error: 'Hermes is installed but has no profile yet', hint: 'Run `hermes setup` once in Terminal, then scan again.' }
+    if (!r.hermes)
+      return { ok: false, ...r, error: 'Hermes isn’t installed on this Mac', hint: 'Install Hermes Agent, set it up once, then scan again.', install: true }
+    if (!r.profiles.length)
+      return { ok: false, ...r, error: 'Hermes is installed but not set up yet', hint: 'Run this once in Terminal, then scan again.', command: 'hermes setup' }
     return { ok: true, ...r }
   } catch (err) {
     return { ok: false, hermes: null, version: null, profiles: [], error: friendlyError(err) }
@@ -62,22 +63,24 @@ export async function scanRemote(host: string): Promise<SetupScan> {
     // The probe goes inline (sh -c '…'), so ssh never waits on stdin.
     const { stdout } = await run('ssh', [...sshBase(host), `sh -c ${shQuote(PROBE)}`], { timeout: 30_000 })
     const r = parseProbe(stdout)
-    if (!r.hermes) return { ok: false, ...r, error: `Connected to ${host}, but Hermes isn’t installed there`, hint: INSTALL_HINT }
-    if (!r.profiles.length) return { ok: false, ...r, error: `Hermes on ${host} has no profile yet`, hint: `Run \`hermes setup\` on ${host} once, then try again.` }
+    if (!r.hermes)
+      return { ok: false, ...r, error: 'Connected, but Hermes isn’t installed there', hint: `Install Hermes Agent on ${host}, set it up once, then retry.`, install: true }
+    if (!r.profiles.length)
+      return { ok: false, ...r, error: 'Hermes is there but not set up yet', hint: `Run this on ${host} once, then retry.`, command: 'hermes setup' }
     return { ok: true, ...r }
   } catch (err) {
     const error = friendlyError(err)
-    return { ok: false, hermes: null, version: null, profiles: [], error, hint: hintFor(error, host) }
+    return { ok: false, hermes: null, version: null, profiles: [], error, ...fixFor(error, host) }
   }
 }
 
 const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
-function hintFor(error: string, host: string): string {
-  if (/key was refused/i.test(error)) return `Set up key login once in Terminal: ssh-copy-id ${host}`
-  if (/find the server/i.test(error)) return `Check the name, or add a "Host ${host}" entry to ~/.ssh/config.`
-  if (/not answering|refused|No network/i.test(error)) return 'Is the server on and reachable from here? (VPN or Tailscale connected?)'
-  return `Check that \`ssh ${host}\` works in Terminal without asking for a password.`
+function fixFor(error: string, host: string): { hint: string; command?: string } {
+  if (/key was refused/i.test(error)) return { hint: 'Add your SSH key to the server once, then retry.', command: `ssh-copy-id ${host}` }
+  if (/find (this|the) server/i.test(error)) return { hint: `Check the name, or add a “Host ${host}” entry to ~/.ssh/config.` }
+  if (/not answering|refused|No network/i.test(error)) return { hint: 'Make sure the server is on and reachable from here (VPN or Tailscale connected?).' }
+  return { hint: 'This should work in Terminal without asking for a password:', command: `ssh ${host}` }
 }
 
 /** Host aliases from ~/.ssh/config (no wildcards), for the host picker. */
