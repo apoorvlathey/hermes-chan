@@ -4,17 +4,20 @@ import path from 'node:path'
 
 import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, shell } from 'electron'
 
-import type { BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
+import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection } from './bots'
-import { CONFIG_PATH, loadConfig } from './config'
+import { CONFIG_PATH, loadConfig, saveConfig } from './config'
+import { scanLocal, scanRemote, sshHosts } from './setup'
 import { closeTransports } from './transport'
 
 /** `HERMESCHAN_DEMO=1` (pnpm demo): fake backend in the renderer, no gateway connections, and a
  *  separate userData folder so demo unread/pin state never mixes with the real app's. */
 const DEMO = process.env.HERMESCHAN_DEMO === '1'
 if (DEMO) app.setPath('userData', path.join(os.homedir(), '.hermes-chan', 'demo-userdata'))
+// A custom config folder also gets its own unread/pin state.
+else if (process.env.HERMESCHAN_HOME) app.setPath('userData', path.join(process.env.HERMESCHAN_HOME, 'userdata'))
 
-const config = DEMO ? { bots: [] } : loadConfig()
+let config: AppConfig = DEMO ? { bots: [] } : loadConfig()
 const bots = new Map<string, BotConnection>()
 let win: BrowserWindow | null = null
 
@@ -67,6 +70,22 @@ function startBots() {
 }
 
 ipcMain.handle('hermes:config', () => config)
+ipcMain.handle('setup:scan-local', () => scanLocal())
+ipcMain.handle('setup:scan-remote', (_e, host: string) => scanRemote(String(host).trim()))
+ipcMain.handle('setup:ssh-hosts', () => sshHosts())
+ipcMain.handle('setup:save', async (_e, next: BotConfig[]) => {
+  if (DEMO) return
+  // Stop every current connection (and SSH masters of hosts we drop), save, start fresh, repaint.
+  const oldHosts = new Set(config.bots.flatMap(b => (b.transport.kind === 'ssh' ? [b.transport.host] : [])))
+  for (const b of bots.values()) b.stop()
+  bots.clear()
+  config = { ...config, bots: next }
+  saveConfig(config)
+  const keep = new Set(next.flatMap(b => (b.transport.kind === 'ssh' ? [b.transport.host] : [])))
+  await closeTransports([...oldHosts].filter(h => !keep.has(h)))
+  startBots()
+  win?.webContents.reload()
+})
 ipcMain.handle('hermes:config-path', () => CONFIG_PATH)
 ipcMain.handle('hermes:statuses', () => [...bots.values()].map(b => b.status))
 ipcMain.handle('hermes:request', (_e, botId: string, method: string, params: Record<string, unknown>) => {

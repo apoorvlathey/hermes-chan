@@ -10,6 +10,7 @@ import {
   focusedKey,
   openSessionRef,
   reconnectBot,
+  openSetup,
   send,
   setNewChatBot,
   stop,
@@ -533,6 +534,9 @@ function OfflineBanner({ bot }: { bot: Bot }) {
           {st?.detail && st.detail !== 'Reconnecting…' ? st.detail : working ? where : `Can't reach ${where}. It keeps retrying on its own.`}
         </span>
       </span>
+      <button className="offline-link" onClick={openSetup} title="Check or change how this bot connects">
+        Edit bots
+      </button>
       <button className="offline-btn" onClick={() => void reconnectBot(bot.id)} disabled={working}>
         {working ? <span className="session-spinner" /> : '↻'} {working ? 'Connecting' : 'Reconnect'}
       </button>

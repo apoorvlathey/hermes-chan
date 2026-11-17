@@ -123,6 +123,8 @@ interface State {
   showRoutine: boolean
   /** Local order of pinned rows (row keys); the pin itself lives on the session in Hermes. */
   pinOrder: string[]
+  /** The bots/setup screen is open over the app. */
+  setupOpen: boolean
   search: string
   windowFocused: boolean
 }
@@ -156,6 +158,7 @@ let state: State = {
   seen: readJson(SEEN_KEY, {}),
   showRoutine: prefs.showRoutine ?? false,
   pinOrder: readJson<string[]>(PIN_ORDER_KEY, []),
+  setupOpen: false,
   search: '',
   windowFocused: document.hasFocus()
 }
@@ -871,6 +874,9 @@ export function movePinned(key: string, index: number) {
   // Keep slots for pins not currently listed (other bot offline, search filter) after the visible ones.
   set(s => ({ pinOrder: [...current, ...s.pinOrder.filter(k => !current.includes(k))] }))
 }
+
+export const openSetup = () => set({ setupOpen: true })
+export const closeSetup = () => set({ setupOpen: false })
 
 /** Rebuild a bot's connection from scratch (all offline bots when no id). */
 export function reconnectBot(botId?: string) {

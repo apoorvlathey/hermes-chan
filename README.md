@@ -21,6 +21,8 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
 
 ## Features
 
+- **Guided setup.** Finds Hermes on your Mac and on your SSH servers, lists the profiles, and turns the ones you tick
+  into bots. No config file editing.
 - **One sidebar.** Bot avatars across the top with a blue dot when there's something new and bouncing dots while a
   bot is working. Below: every chat from every bot, newest first, grouped by Today / Yesterday / This week.
 - **Pinned chats.** Pin from any row, drag to reorder, or drag a chat onto the Pinned section to pin it in place.
@@ -81,7 +83,7 @@ HermesChan is an unofficial community client for Hermes Agent; it isn't made by 
    Or right-click the app in Finder, choose **Open**, and confirm (on recent macOS you may need **System Settings >
    Privacy & Security > Open Anyway** instead).
 
-Then [configure your bots](#configure-your-bots).
+Then open HermesChan; it walks you through [getting started](#getting-started).
 
 ### Build from source
 
@@ -105,10 +107,45 @@ pnpm dev    # hot-reload
 pnpm demo   # the app with a fake backend and made-up data; touches no gateway and none of your settings
 ```
 
-## Configure your bots
+## Getting started
 
-On first launch HermesChan writes `~/.hermes-chan/config.json` with the default Hermes profile on this Mac. Edit it
-to list your bots:
+The first time you open HermesChan it shows a short setup screen instead of an empty app:
+
+1. **On this Mac.** It looks for Hermes Agent here and lists its profiles (`default` is ticked for you).
+2. **On a server.** Type an SSH host, or click one of the hosts it found in your `~/.ssh/config`. It checks
+   that Hermes is installed there and lists that server's profiles. Nothing is installed or changed on the server.
+3. **Tick the profiles you want** (each one becomes a bot in the sidebar) and press **Start chatting**.
+
+You can come back to it any time from the **＋ Bots** tile at the end of the bot row, or from **Edit bots** on
+the banner that appears when a bot can't connect.
+
+**Preparing a server.** HermesChan connects with your SSH keys and can't answer a password prompt, so make sure
+`ssh my-server` works in Terminal without one. If it doesn't:
+
+```bash
+ssh-copy-id my-server   # once, to install your key on the server
+```
+
+A `~/.ssh/config` entry gives the server a short name that shows up as a suggestion in setup:
+
+```
+Host my-server
+  HostName 203.0.113.10
+  User me
+```
+
+**If something's off**, setup tells you what and how to fix it:
+
+| Message | What to do |
+|---|---|
+| Hermes isn't installed on this Mac / on the server | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/), run `hermes setup` once, then scan again |
+| SSH key was refused | `ssh-copy-id <host>` |
+| Can't find the server | Check the host name, or add it to `~/.ssh/config` |
+| The server is not answering | Make sure it's on and reachable (VPN or Tailscale connected?) |
+
+### Config file (optional)
+
+Setup saves your bots to `~/.hermes-chan/config.json`. You can also edit it by hand, then restart the app:
 
 ```jsonc
 {
@@ -123,12 +160,10 @@ to list your bots:
 }
 ```
 
-- `host` is an entry in your `~/.ssh/config`; it must work non-interactively (`BatchMode=yes`).
 - `hermes` (optional, per transport) overrides the path to the `hermes` binary; the default is `~/.local/bin/hermes`.
 - Names, colours and avatars come from each profile's Bot Mode settings when it has them; the values here are
   fallbacks.
-
-Restart the app after editing the config.
+- `HERMESCHAN_HOME=/some/folder` points the app at a different config folder (handy for a second setup).
 
 ## How it works
 

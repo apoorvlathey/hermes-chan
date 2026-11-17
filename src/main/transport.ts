@@ -44,7 +44,7 @@ function controlPath(host: string) {
   return path.join(CONTROL_DIR, `${host.replace(/[^a-zA-Z0-9_.-]/g, '_')}.sock`)
 }
 
-function sshBase(host: string) {
+export function sshBase(host: string) {
   return [
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=10',

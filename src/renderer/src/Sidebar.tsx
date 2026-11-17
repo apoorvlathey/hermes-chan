@@ -8,6 +8,7 @@ import {
   isUnread,
   movePinned,
   newChat,
+  openSetup,
   openBot,
   openSession,
   pinnedSessions,
@@ -59,6 +60,12 @@ function BotsRow() {
           </button>
         )
       })}
+      <button className="bot-tile add" onClick={openSetup} title="Add or remove bots">
+        <span className="bot-avatar-wrap">
+          <span className="add-tile">＋</span>
+        </span>
+        <span className="bot-name">Bots</span>
+      </button>
     </div>
   )
 }

@@ -5,7 +5,7 @@ import type { BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope 
 import { connectGateway, type Endpoint, mintHttpTicket, resetHost } from './transport'
 
 /** One line a person can act on, from an ssh / attach / socket failure. */
-function friendlyError(err: unknown): string {
+export function friendlyError(err: unknown): string {
   const e = err as { message?: string; stderr?: string; code?: string | number }
   const text = `${e?.stderr ?? ''} ${e?.message ?? ''}`
   if (/Could not resolve hostname|Name or service not known/i.test(text)) return "Can't find the server (no internet?)"

@@ -2130,3 +2130,395 @@ button.ghost {
   color: var(--canvas);
   background: var(--text);
 }
+
+/* ─── getting started / manage bots ─── */
+
+.setup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 0%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 70%),
+    var(--canvas);
+  user-select: none;
+}
+
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(8, 6, 12, 0.55);
+  backdrop-filter: blur(6px);
+  animation: fade 0.2s ease;
+}
+
+.setup-overlay .setup {
+  position: absolute;
+  inset: 40px max(40px, calc(50% - 400px));
+  height: auto;
+  border-radius: 24px;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: pop-in 0.35s var(--spring);
+}
+
+.setup-overlay .setup .titlebar-drag {
+  display: none;
+}
+
+.su-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 28px 24px;
+}
+
+.setup.manage .su-panel {
+  padding-top: 32px;
+}
+
+.su-head {
+  text-align: center;
+  margin-bottom: 26px;
+}
+
+.su-logo {
+  width: 92px;
+  height: 92px;
+  margin-bottom: 10px;
+  animation: wiggle 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 14px 30px color-mix(in srgb, var(--gold) 35%, transparent));
+}
+
+.su-head h1 {
+  margin: 0;
+  font: 750 28px var(--round);
+  letter-spacing: -0.02em;
+}
+
+.su-head p {
+  max-width: 480px;
+  margin: 8px auto 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.su-card {
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  animation: rise 0.35s var(--ease);
+}
+
+.su-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.su-card-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.su-emoji {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.su-card h2 {
+  margin: 0 0 3px;
+  font: 650 15px var(--round);
+}
+
+.su-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.su-status.bad b {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.su-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.su-hint a {
+  color: var(--gold);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.su-hint code,
+.su-status code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--raise-2);
+  font: 11.5px var(--mono);
+  user-select: text;
+}
+
+.su-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+}
+
+.su-dot.ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent);
+}
+
+.su-dot.bad {
+  background: var(--danger);
+}
+
+.su-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.su-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.2s var(--spring);
+}
+
+.su-profile:hover {
+  border-color: var(--line-2);
+}
+
+.su-profile:active {
+  transform: scale(0.99);
+}
+
+.su-profile.on {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 9%, var(--raise));
+}
+
+.su-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--line-2);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold-ink);
+  transition: background 0.15s, border-color 0.15s, transform 0.25s var(--spring);
+}
+
+.su-check.on {
+  border-color: var(--gold);
+  background: var(--gold);
+  transform: scale(1.05);
+}
+
+.su-profile-name {
+  flex: 1;
+  font: 600 14px var(--round);
+}
+
+.su-profile-note {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.su-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.su-add input {
+  flex: 1;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2);
+  background: var(--canvas);
+  outline: 0;
+  font-size: 13.5px;
+  user-select: text;
+}
+
+.su-add input:focus {
+  border-color: color-mix(in srgb, var(--gold) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 15%, transparent);
+}
+
+.su-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.su-chip {
+  padding: 4px 11px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  font-size: 12.5px;
+  color: var(--text-2);
+  transition: all 0.2s var(--spring);
+}
+
+.su-chip:hover {
+  color: var(--text);
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.su-host {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.su-host-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.su-host-name {
+  flex: none;
+  font: 650 14px var(--mono);
+}
+
+.su-host-head .su-status {
+  flex: 1;
+  min-width: 0;
+}
+
+.su-host-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.su-btn,
+.su-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 11px;
+  font-weight: 600;
+  font-size: 13.5px;
+  transition: background 0.15s, transform 0.2s var(--spring), opacity 0.15s;
+}
+
+.su-btn {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+.su-btn.primary {
+  background: var(--gold);
+  color: var(--gold-ink);
+  padding: 0 20px;
+}
+
+.su-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.su-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.su-ghost {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.su-ghost:hover {
+  background: var(--raise);
+  color: var(--text);
+}
+
+.su-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 28px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.su-count {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* the "＋ Bots" tile at the end of the bot row */
+.add-tile {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 32%;
+  border: 1.5px dashed var(--line-2);
+  color: var(--text-3);
+  font-size: 20px;
+  transition: all 0.25s var(--spring);
+}
+
+.bot-tile.add:hover .add-tile {
+  border-color: var(--gold);
+  color: var(--gold);
+  transform: rotate(90deg);
+}
+
+.offline-link {
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.offline-link:hover {
+  background: var(--raise);
+  color: var(--text);
+}

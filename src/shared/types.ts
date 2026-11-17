@@ -39,12 +39,31 @@ export interface ServerRequestEnvelope {
   params: Record<string, any>
 }
 
+/** Result of looking for Hermes on this Mac or on an SSH host (setup flow). */
+export interface SetupScan {
+  ok: boolean
+  /** Path to the `hermes` binary, when found. */
+  hermes: string | null
+  version: string | null
+  /** Profile names on disk ("default" plus ~/.hermes/profiles/*). */
+  profiles: string[]
+  error?: string
+  /** What to do about the error, in one line. */
+  hint?: string
+}
+
 export interface HermesBridge {
   config(): Promise<AppConfig>
   request<T = any>(botId: string, method: string, params?: Record<string, unknown>): Promise<T>
   respond(botId: string, requestId: string, result: Record<string, unknown>): Promise<void>
   /** Store an image on the bot's gateway host; returns the gateway-visible path for `attachments`. */
   uploadImage(botId: string, dataUrl: string, filename: string): Promise<{ path: string; mime: string }>
+  /** Setup flow: look for Hermes here / on a host, list ~/.ssh/config hosts, save the bot list. */
+  setupScanLocal(): Promise<SetupScan>
+  setupScanRemote(host: string): Promise<SetupScan>
+  setupSshHosts(): Promise<string[]>
+  /** Writes ~/.hermes-chan/config.json, reconnects every bot and reloads the window. */
+  setupSave(bots: BotConfig[]): Promise<void>
   /** Rebuild a bot's connection from scratch (or every offline bot when omitted). */
   reconnect(botId?: string): Promise<void>
   /** Hermes Desktop's favourite models (`provider::model`) and per-model presets. */
