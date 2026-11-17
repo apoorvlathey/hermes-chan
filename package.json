@@ -3,7 +3,7 @@
   "productName": "HermesChan",
   "version": "0.1.0",
   "private": true,
-  "description": "A small, friendly desktop chat for my Hermes agents",
+  "description": "A small, friendly desktop chat for Hermes Agent bots",
   "license": "MIT",
   "main": "out/main/index.js",
   "type": "module",
