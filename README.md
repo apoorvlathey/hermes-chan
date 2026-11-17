@@ -60,12 +60,33 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
 
 ## Requirements
 
-- macOS on Apple Silicon (other platforms should work in dev, but packaging is set up for macOS only)
-- Node 22+ and [pnpm](https://pnpm.io)
+- A Mac with Apple Silicon (M1 or later)
 - [Hermes Agent](https://github.com/NousResearch/hermes-agent) with its gateway, installed on this Mac and/or on a
   server you can reach with `ssh <host>` using key auth
 
+HermesChan is an unofficial community client for Hermes Agent; it isn't made by or affiliated with Nous Research.
+
 ## Install
+
+1. Download the latest `HermesChan-<version>-arm64.dmg` (or the `.zip`) from
+   [Releases](https://github.com/apoorvlathey/hermes-chan/releases/latest).
+2. Open the DMG and drag **HermesChan** into **Applications** (or unzip and move `HermesChan.app` there).
+3. The app isn't signed with an Apple Developer ID, so the first launch gets blocked: macOS says HermesChan "is
+   damaged and can't be opened" or is "from an unidentified developer". Clear the download quarantine flag once:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/HermesChan.app
+   ```
+
+   Or right-click the app in Finder, choose **Open**, and confirm (on recent macOS you may need **System Settings >
+   Privacy & Security > Open Anyway** instead).
+
+Then [configure your bots](#configure-your-bots).
+
+### Build from source
+
+Needs Node 22+ and [pnpm](https://pnpm.io). Other platforms should work in dev, but packaging is set up for macOS
+only.
 
 ```bash
 pnpm install
@@ -74,6 +95,8 @@ pnpm install-app   # builds HermesChan.app and installs (or updates) it in /Appl
 
 `install-app` packages with electron-builder, ad-hoc signs the bundle (it's a personal, unsigned build), clears the
 quarantine flag, quits a running copy and replaces `/Applications/HermesChan.app`. Re-run it after pulling changes.
+
+`pnpm release:build` builds the ad-hoc signed DMG and ZIP that go on the Releases page (into `dist/`).
 
 For development:
 

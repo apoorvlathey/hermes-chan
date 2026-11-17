@@ -15,6 +15,7 @@
     "probe": "tsx scripts/probe.ts",
     "sync-shared": "bash scripts/sync-shared.sh",
     "package": "electron-vite build && electron-builder --mac --dir",
+    "release:build": "electron-vite build && electron-builder --mac --arm64 -c.mac.identity=- --publish never",
     "install-app": "bash scripts/install-app.sh",
     "demo": "electron-vite build && HERMESCHAN_DEMO=1 electron ."
   },
@@ -56,12 +57,27 @@
       "package.json"
     ],
     "mac": {
-      "target": "dir",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "identity": null,
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "hardenedRuntime": false
     },
-    "asar": true
+    "asar": true,
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
   }
 }
