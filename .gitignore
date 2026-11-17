@@ -5,3 +5,4 @@ dist/
 .DS_Store
 !build/icon.png
 !docs/screenshots/*.png
+!src/renderer/public/icon.png
