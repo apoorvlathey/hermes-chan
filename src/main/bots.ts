@@ -1,4 +1,6 @@
 /** One live gateway connection per configured bot, multiplexed to the renderer over IPC. */
+import { app } from 'electron'
+
 import { GatewayClient } from '../../vendor/hermes-shared/node/gateway-client'
 import type { ServerRequest } from '../../vendor/hermes-shared/json-rpc-channel'
 import type { BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
@@ -55,7 +57,7 @@ export class BotConnection {
         }
       },
       source: 'tui',
-      client: { name: 'hermes-chan', version: '0.1.0' },
+      client: { name: 'hermes-chan', version: app.getVersion() },
       onLifecycle: line => console.log(`[${bot.id}] ${line}`)
     })
     this.gw = gw
