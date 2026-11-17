@@ -4,6 +4,8 @@
 import type { BotStatus, HermesBridge } from '../../shared/types'
 
 export const IS_DEMO = new URLSearchParams(location.search).has('demo')
+/** `?demo=onboarding`: no bots yet, so the app opens on its first-run setup screen. */
+const ONBOARDING = new URLSearchParams(location.search).get('demo') === 'onboarding'
 
 // ─── time helpers (relative to now, local time) ────────────────────────────────────────────────
 
@@ -282,7 +284,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
 
   return {
     ...real,
-    config: async () => ({
+    config: async () => ONBOARDING ? { bots: [], hiddenSources: ['cron', 'tool', 'kanban', 'subagent'] } : ({
       bots: BOTS.map(b => ({ id: b.id, name: b.name, color: b.color, transport: { kind: 'local' as const, profile: 'default' } })),
       hiddenSources: ['cron', 'tool', 'kanban', 'subagent']
     }),
@@ -290,9 +292,17 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     request,
     respond: async () => undefined,
     reconnect: async () => undefined,
-    setupScanLocal: async () => ({ ok: true, hermes: '/usr/local/bin/hermes', version: 'Hermes Agent (demo)', profiles: ['default', 'research'] }),
-    setupScanRemote: async (host: string) => ({ ok: true, hermes: '~/.local/bin/hermes', version: 'Hermes Agent (demo)', profiles: ['default'], ...(host ? {} : {}) }),
-    setupSshHosts: async () => ['home-server'],
+    setupScanLocal: async () => {
+      await new Promise(r => setTimeout(r, 700))
+      return { ok: true, hermes: '/usr/local/bin/hermes', version: 'Hermes Agent v0.23.1', profiles: ['default', 'research', 'writing'] }
+    },
+    setupScanRemote: async (host: string) => {
+      await new Promise(r => setTimeout(r, 900))
+      return host === 'home-server'
+        ? { ok: true, hermes: '~/.local/bin/hermes', version: 'Hermes Agent v0.23.1', profiles: ['default', 'ops'] }
+        : { ok: false, hermes: null, version: null, profiles: [], error: 'SSH key was refused', hint: 'Add your SSH key to the server once, then retry.', command: `ssh-copy-id ${host}` }
+    },
+    setupSshHosts: async () => ['home-server', 'build-box'],
     setupSave: async () => undefined,
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
     readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),

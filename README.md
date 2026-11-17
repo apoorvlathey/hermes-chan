@@ -105,11 +105,16 @@ For development:
 ```bash
 pnpm dev    # hot-reload
 pnpm demo   # the app with a fake backend and made-up data; touches no gateway and none of your settings
+HERMESCHAN_DEMO=onboarding pnpm exec electron .   # the demo, starting on the setup screen (after pnpm build)
 ```
 
 ## Getting started
 
 The first time you open HermesChan it shows a short setup screen instead of an empty app:
+
+<p align="center">
+  <img src="docs/screenshots/onboarding.png" width="760" alt="HermesChan's setup screen: profiles found on this Mac and on an SSH server, three of them selected, with a preview of the sidebar and a Start chatting button" />
+</p>
 
 1. **On this Mac.** It looks for Hermes Agent here and lists its profiles (`default` is ticked for you).
 2. **On a server.** Type an SSH host, or click one of the hosts it found in your `~/.ssh/config`. It checks

@@ -129,7 +129,15 @@ export function Setup({ firstRun }: { firstRun: boolean }) {
   }
 
 
-  const looks = useLooks()
+  const liveLooks = useLooks()
+  const visibleKeys = [
+    ...(local.scan?.profiles ?? []).map(p => `local:${p}`),
+    ...existing.filter(b => b.transport.kind === 'local').map(b => keyOf(b)),
+    ...hosts.flatMap(h => (h.scan?.profiles ?? []).map(p => `ssh:${h.host}:${p}`))
+  ]
+  const colors = assignColors([...new Set(visibleKeys)].filter(k => !liveLooks[k]))
+  const looks: Record<string, Look> = { ...liveLooks }
+  for (const [k, color] of Object.entries(colors)) looks[k] = { ...(looks[k] ?? { name: '' }), color, name: looks[k]?.name ?? '' }
   const unseenLocal = existing
     .filter(b => b.transport.kind === 'local' && !(local.scan?.profiles ?? []).includes(b.transport.profile))
     .map(b => b.transport.profile)
@@ -308,10 +316,25 @@ export function Setup({ firstRun }: { firstRun: boolean }) {
 
 /** A stable on-palette colour for a profile with no Bot Mode colour yet (FNV-1a over its key). */
 const HUES = [45, 210, 330, 158, 275, 18, 190, 95]
-export const colorFor = (key: string) => {
+const hueIndex = (key: string) => {
   let h = 0x811c9dc5
   for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0
-  return `hsl(${HUES[h % HUES.length]} 72% 63%)`
+  return h % HUES.length
+}
+export const colorFor = (key: string) => `hsl(${HUES[hueIndex(key)]} 72% 63%)`
+
+/** Colours for every profile on screen: each starts from its stable hash and steps to the next
+ *  free hue on a clash, so no two visible profiles share a colour. */
+function assignColors(keys: string[]): Record<string, string> {
+  const used = new Set<number>()
+  const out: Record<string, string> = {}
+  for (const k of keys) {
+    let i = hueIndex(k)
+    for (let n = 0; n < HUES.length && used.has(i); n++) i = (i + 1) % HUES.length
+    used.add(i)
+    out[k] = `hsl(${HUES[i]} 72% 63%)`
+  }
+  return out
 }
 
 /** How an existing bot looks in the sidebar (real avatar, colour, display name), if we know it. */
@@ -411,9 +434,9 @@ function ProfileGrid({
         const on = !!selected[it.key]
         return (
           <button key={it.key} className={`su-card ${on ? 'on' : ''}`} onClick={() => onToggle(it.key)} aria-pressed={on}>
-            <Tile name={looks[it.key]?.name ?? it.label} color={looks[it.key]?.color ?? colorFor(it.key)} avatar={looks[it.key]?.avatar} />
+            <Tile name={looks[it.key]?.name || it.label} color={looks[it.key]?.color ?? colorFor(it.key)} avatar={looks[it.key]?.avatar} />
             <span className="su-card-text">
-              <span className="su-card-name">{looks[it.key]?.name ?? it.name}</span>
+              <span className="su-card-name">{looks[it.key]?.name || it.name}</span>
               <span className="su-card-detail">{it.detail}</span>
             </span>
             <span className={`su-tick ${on ? 'on' : ''}`}>{on && <Icon.Check />}</span>
@@ -479,7 +502,7 @@ function Problem({ scan }: { scan: SetupScan }) {
 
 /** What the sidebar will look like with the current selection. */
 function SidebarPreview({ bots, looks }: { bots: BotConfig[]; looks: Record<string, Look> }) {
-  const nameOf = (b: BotConfig) => looks[keyOf(b)]?.name ?? b.name ?? b.id
+  const nameOf = (b: BotConfig) => looks[keyOf(b)]?.name || b.name || b.id
   return (
     <div className="su-preview" aria-label="Sidebar preview">
       <div className="su-preview-tiles">

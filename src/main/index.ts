@@ -12,7 +12,9 @@ import { closeTransports } from './transport'
 
 /** `HERMESCHAN_DEMO=1` (pnpm demo): fake backend in the renderer, no gateway connections, and a
  *  separate userData folder so demo unread/pin state never mixes with the real app's. */
-const DEMO = process.env.HERMESCHAN_DEMO === '1'
+const DEMO = process.env.HERMESCHAN_DEMO === '1' || process.env.HERMESCHAN_DEMO === 'onboarding'
+/** `HERMESCHAN_DEMO=onboarding` starts the demo on its first-run setup screen. */
+const DEMO_Q = process.env.HERMESCHAN_DEMO === 'onboarding' ? 'onboarding' : '1'
 if (DEMO) app.setPath('userData', path.join(os.homedir(), '.hermes-chan', 'demo-userdata'))
 // A custom config folder also gets its own unread/pin state.
 else if (process.env.HERMESCHAN_HOME) app.setPath('userData', path.join(process.env.HERMESCHAN_HOME, 'userdata'))
@@ -53,8 +55,8 @@ function createWindow() {
     }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${DEMO ? '?demo=1' : ''}`)
-  else void win.loadFile(path.join(import.meta.dirname, '../renderer/index.html'), DEMO ? { query: { demo: '1' } } : undefined)
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${DEMO ? `?demo=${DEMO_Q}` : ''}`)
+  else void win.loadFile(path.join(import.meta.dirname, '../renderer/index.html'), DEMO ? { query: { demo: DEMO_Q } } : undefined)
 }
 
 function startBots() {

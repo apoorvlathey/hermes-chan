@@ -1,7 +1,8 @@
 /** Dev helper: drive a running HermesChan over Chrome DevTools Protocol.
  *  Start the app with `pnpm build && pnpm exec electron . --remote-debugging-port=9333`, then:
  *    pnpm tsx scripts/cdp.ts shot out.png            screenshot
- *    pnpm tsx scripts/cdp.ts eval "document.title"   evaluate JS in the renderer */
+ *    pnpm tsx scripts/cdp.ts eval "document.title"   evaluate JS in the renderer
+ *    pnpm tsx scripts/cdp.ts shot-size 1180 1000 out.png   screenshot at a given window size */
 import { writeFileSync } from 'node:fs'
 
 const port = process.env.CDP_PORT ?? '9333'
@@ -28,7 +29,16 @@ const call = (method: string, params: Record<string, unknown> = {}) =>
     ws.send(JSON.stringify({ id: my, method, params }))
   })
 
-if (cmd === 'shot') {
+if (cmd === 'shot-size') {
+  // pnpm tsx scripts/cdp.ts shot-size 1180 1000 out.png — render at a given CSS size (2x), then capture
+  const [, w, h, out = 'shot.png'] = process.argv.slice(2)
+  await call('Emulation.setDeviceMetricsOverride', { width: Number(w), height: Number(h), deviceScaleFactor: 2, mobile: false })
+  await new Promise(r => setTimeout(r, 400))
+  const { data } = await call('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(out, Buffer.from(data, 'base64'))
+  await call('Emulation.clearDeviceMetricsOverride')
+  console.log('saved', out)
+} else if (cmd === 'shot') {
   const { data } = await call('Page.captureScreenshot', { format: 'png' })
   writeFileSync(arg ?? 'shot.png', Buffer.from(data, 'base64'))
   console.log('saved', arg ?? 'shot.png')
