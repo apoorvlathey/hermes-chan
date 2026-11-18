@@ -97,6 +97,15 @@ const tool = (emoji: string, text: string, preview: string, ts: number) => ({
   labels: [{ emoji, text, preview }],
   timestamp: ts
 })
+/** A built-in tool call as Hermes stores it: name, args and the gateway's short preview. */
+const call = (name: string, args: Record<string, unknown>, ts: number, result?: unknown) => ({
+  role: 'tool',
+  name,
+  args,
+  ...(result !== undefined ? { content: JSON.stringify(result) } : {}),
+  context: String(Object.values(args)[0] ?? '').slice(0, 80),
+  timestamp: ts
+})
 const user = (text: string, ts: number) => ({ role: 'user', text, timestamp: ts })
 const bot = (text: string, ts: number) => ({ role: 'assistant', text, timestamp: ts })
 const cronReport = (job: string, text: string, ts: number) => ({
@@ -169,8 +178,53 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
   ],
   ci: [
     user('The integration tests keep timing out on a cold cache. Can you find out why?', minsAgo(60)),
-    tool('🔎', 'Search Files', 'beforeAll|setTimeout in tests/', minsAgo(59)),
-    tool('🖥️', 'Terminal', 'pnpm test --filter api -- --runInBand', minsAgo(57)),
+    call('search_files', { pattern: 'beforeAll|setTimeout', path: 'tests/' }, minsAgo(59)),
+    call('read_file', { path: '/home/dev/projects/api/tests/setup/cache.ts' }, minsAgo(59)),
+    call('read_file', { path: '/home/dev/projects/api/tests/integration/projects.test.ts' }, minsAgo(58)),
+    call('read_file', { path: '/home/dev/projects/api/jest.config.ts' }, minsAgo(58)),
+    call(
+      'terminal',
+      { command: 'rm -rf .cache/api && pnpm test --filter api -- --runInBand --testTimeout=30000 2>&1 | tail -40' },
+      minsAgo(57),
+      {
+        output:
+          "FAIL tests/integration/projects.test.ts\n  ● lists projects\n\n    thrown: \"Exceeded timeout of 5000 ms for a test.\"\n\n      at tests/integration/projects.test.ts:9:1\n\nTests: 1 failed, 23 passed, 24 total\nTime:  41.2 s",
+        exit_code: 1,
+        error: null
+      }
+    ),
+    call('terminal', { command: 'git log --oneline -5 -- tests/setup/cache.ts' }, minsAgo(56), {
+      output: 'a41c9e2 Warm the API cache once per suite\n7be0d13 Move test setup into tests/setup',
+      exit_code: 0,
+      error: null
+    }),
+    call(
+      'patch',
+      { mode: 'replace', path: '/home/dev/projects/api/tests/setup/cache.ts', old_string: '  warmCache()', new_string: '  await warmCache({ timeoutMs: 15_000 })' },
+      minsAgo(54),
+      {
+        success: true,
+        diff: "--- a/tests/setup/cache.ts\n+++ b/tests/setup/cache.ts\n@@ -3,5 +3,5 @@ import { warmCache } from '../../src/cache'\n \n beforeAll(async () => {\n-  warmCache()\n+  await warmCache({ timeoutMs: 15_000 })\n })"
+      }
+    ),
+    call('terminal', { command: 'for i in $(seq 1 10); do rm -rf .cache/api && pnpm test --filter api -- --runInBand || exit 1; done' }, minsAgo(53), {
+      output: 'Tests: 24 passed, 24 total (×10)\nTime:  38.9 s average',
+      exit_code: 0,
+      error: null
+    }),
+    call('web_search', { query: 'jest beforeAll async not awaited cold cache' }, minsAgo(50)),
+    call('terminal', { command: 'pnpm lint --filter api' }, minsAgo(49), { output: 'No problems found.', exit_code: 0, error: null }),
+    call('terminal', { command: "node -e 'console.log(JSON.stringify(require(\"./package.json\").scripts))'" }, minsAgo(49), {
+      output: '{"test":"jest","lint":"eslint . --max-warnings 0","build":"tsc -p tsconfig.build.json","ci":"pnpm lint && pnpm test --runInBand"}',
+      exit_code: 0,
+      error: null
+    }),
+    call('memory', { action: 'add', target: 'project', content: 'api tests: warm the cache with await in beforeAll; cold runs take ~40s', tags: ['ci', 'api'], ttl_days: 90 }, minsAgo(48), {
+      success: true,
+      id: 'mem_2f81',
+      stored: { target: 'project', tags: ['ci', 'api'], expires: '2027-02-16' }
+    }),
+    call('terminal', { command: 'git diff --stat' }, minsAgo(49), { output: ' tests/setup/cache.ts | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)', exit_code: 0, error: null }),
     bot(
       "Found it. The suite warms the cache in `beforeAll` but never awaits it, so the first test races the warm-up:\n\n```ts\nbeforeAll(async () => {\n  // was: warmCache()  (fire-and-forget)\n  await warmCache({ timeoutMs: 15_000 })\n})\n\ntest('lists projects', async () => {\n  const res = await api.get('/projects')\n  expect(res.status).toBe(200)\n})\n```\n\nThe fix is one line:\n\n```diff\n- warmCache()\n+ await warmCache({ timeoutMs: 15_000 })\n```\n\nTo reproduce the cold-cache case locally:\n\n```bash\nrm -rf .cache/api && pnpm test --filter api -- --runInBand\n```\n\nTen runs in a row pass with the change.",
       minsAgo(48)
@@ -179,7 +233,7 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
   hero: [
     user('Give me three hero headline options for a habit tracker app, and compare their tone.', minsAgo(9)),
     tool('🧠', 'Memory Search', 'brand voice notes', minsAgo(9)),
-    tool('📄', 'Read File', 'docs/brand-voice.md', minsAgo(9)),
+    call('read_file', { path: 'docs/brand-voice.md' }, minsAgo(9)),
     bot(
       "Here are three directions, all under eight words:\n\n| Headline | Tone | Best for |\n|---|---|---|\n| **Small steps. Every day.** | Calm, encouraging | Broad audience |\n| **Your streak starts now** | Energetic | Fitness-leaning users |\n| **Build habits that stick** | Practical | Productivity crowd |\n\nMy pick is **Small steps. Every day.** It matches the gentle voice in your brand notes and leaves room for a playful subhead:\n\n```text\nSmall steps. Every day.\nTrack habits in 5 seconds, celebrate the streaks that matter.\n```\n\nWant me to mock these up in the hero so you can compare them side by side?",
       minsAgo(6)

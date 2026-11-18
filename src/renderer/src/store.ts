@@ -52,6 +52,12 @@ export interface ToolInfo {
   label: string
   emoji?: string
   preview?: string
+  /** The call's arguments (Hermes sends them with tool.start and on stored rows), for the expanded row. */
+  args?: Record<string, unknown>
+  /** The gateway's short argument preview. */
+  context?: string
+  /** What the tool returned: live on tool.complete; stored rows keep it only for file edits (the diff). */
+  result?: unknown
   done: boolean
   duration?: number
 }
@@ -410,7 +416,19 @@ function toolFromLabels(m: any): ToolInfo {
     label: label?.text || m.context || prettyTool(m.name),
     emoji: label?.emoji,
     preview: label?.preview || undefined,
+    args: m.args && typeof m.args === 'object' ? m.args : undefined,
+    context: m.context || undefined,
+    result: parseResult(m.content),
     done: true
+  }
+}
+
+function parseResult(v: unknown): unknown {
+  if (typeof v !== 'string') return v ?? undefined
+  try {
+    return JSON.parse(v)
+  } catch {
+    return v || undefined
   }
 }
 
@@ -876,6 +894,8 @@ function onEvent({ botId, event }: GatewayEventEnvelope) {
           label: label?.text || payload.context || prettyTool(payload.name),
           emoji: label?.emoji,
           preview: label?.preview || payload.preview || undefined,
+          args: payload.args && typeof payload.args === 'object' ? payload.args : undefined,
+          context: payload.context || undefined,
           done: false
         }
         return { thinking: true, items: [...closeStreaming(t.items), { kind: 'tool', id: nid(), tool, ts: Date.now() / 1000 }] }
@@ -885,7 +905,18 @@ function onEvent({ botId, event }: GatewayEventEnvelope) {
     case 'tool.complete': {
       patchThread(key, t => ({
         items: t.items.map(i =>
-          i.kind === 'tool' && i.tool.toolId === payload.tool_id ? { ...i, tool: { ...i.tool, done: true, duration: payload.duration_s ?? undefined } } : i
+          i.kind === 'tool' && i.tool.toolId === payload.tool_id
+            ? {
+                ...i,
+                tool: {
+                  ...i.tool,
+                  done: true,
+                  duration: payload.duration_s ?? undefined,
+                  args: payload.args && typeof payload.args === 'object' && Object.keys(payload.args).length ? payload.args : i.tool.args,
+                  result: payload.result ?? payload.summary ?? i.tool.result
+                }
+              }
+            : i
         )
       }))
       break

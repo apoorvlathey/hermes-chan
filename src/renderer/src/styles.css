@@ -1263,15 +1263,22 @@ kbd {
 .tools {
   align-self: flex-start;
   max-width: 100%;
+  min-width: 0;
   animation: rise 0.3s var(--ease);
+}
+
+/* Open, the list takes the column's width so long commands and paths truncate inside it. */
+.tools.open {
+  align-self: stretch;
 }
 
 .tools-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: 100%;
   height: 28px;
-  padding: 0 12px 0 8px;
+  padding: 0 11px 0 10px;
   border-radius: 99px;
   background: var(--raise);
   color: var(--text-2);
@@ -1283,56 +1290,282 @@ kbd {
   background: var(--raise-2);
 }
 
-.tools-emojis {
-  letter-spacing: 1px;
-}
-
-.chev {
+.tools-pill-icon {
+  display: inline-flex;
+  flex: none;
   color: var(--text-3);
-  font-size: 10px;
 }
 
-.tools-list {
-  margin: 6px 0 0;
-  padding: 6px;
-  list-style: none;
-  border-radius: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  font-size: 12.5px;
-}
-
-.tools-list li {
+.tools-label {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 7px;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.tools-list li.pending {
-  color: var(--text-3);
-}
-
-.tool-name {
+.tools-label b {
   flex: none;
   font-weight: 550;
 }
 
-.tool-preview {
-  flex: 1;
+.tools-label-detail {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-3);
+}
+
+.tools-label-detail.mono,
+.tool-detail.mono {
+  font: 11.5px var(--mono);
+}
+
+.chev {
+  flex: none;
+  color: var(--text-3);
+  transition: transform 0.15s var(--ease);
+}
+
+.tools.open .chev {
+  transform: rotate(90deg);
+}
+
+.tool-list {
+  position: relative;
+  margin: 6px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  font-size: 12.5px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+
+.tool-row + .tool-row {
+  border-top: 1px solid var(--line);
+}
+
+.tool-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 12px;
+  text-align: left;
+  color: var(--text);
+}
+
+.tool-line:not(:disabled):hover {
+  background: var(--raise);
+}
+
+.tool-line:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.tool-icon {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  justify-content: center;
+  color: var(--text-3);
+}
+
+.tool-emoji {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tool-verb {
+  flex: none;
+  color: var(--text-2);
+  font-weight: 550;
+}
+
+.tool-detail {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+
+.tool-detail.file {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tool-file {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 11.5px var(--mono);
+}
+
+.tool-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+  font-size: 11.5px;
 }
 
 .tool-dur {
   margin-left: auto;
   flex: none;
+  padding-left: 8px;
   color: var(--text-3);
   font: 11px var(--mono);
+}
+
+.tool-row.running .tool-verb,
+.tool-row.running .tool-detail {
+  color: var(--text-3);
+}
+
+.tool-list-wrap {
+  position: relative;
+  margin-top: 6px;
+}
+
+.tool-list-wrap .tool-list {
+  margin-top: 0;
+}
+
+/* Fades at the list's ends while there's more to scroll that way. */
+.tool-list-wrap::before,
+.tool-list-wrap::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 44px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.tool-list-wrap::before {
+  top: 1px;
+  height: 28px;
+  border-radius: 9px 9px 0 0;
+  background: linear-gradient(var(--panel), transparent);
+}
+
+.tool-list-wrap::after {
+  bottom: 1px;
+  height: 64px;
+  border-radius: 0 0 9px 9px;
+  background: linear-gradient(transparent, var(--panel) 78%);
+  box-shadow: inset 0 -10px 12px -10px rgba(0, 0, 0, 0.35);
+}
+
+.tool-list-wrap.more-above::before,
+.tool-list-wrap.more-below::after {
+  opacity: 1;
+}
+
+.tool-chev {
+  flex: none;
+  margin-left: 2px;
+  color: var(--text-3);
+  opacity: 0.6;
+  transition: transform 0.15s var(--ease), opacity 0.15s;
+}
+
+.tool-line:hover .tool-chev {
+  opacity: 1;
+}
+
+.tool-row.open .tool-chev {
+  transform: rotate(90deg);
+}
+
+.tool-row.open .tool-line {
+  background: var(--raise);
+}
+
+.tool-failed {
+  flex: none;
+  margin-left: auto;
+  color: var(--danger);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.tool-failed + .tool-dur {
+  margin-left: 0;
+}
+
+.tool-row.failed .tool-icon {
+  color: var(--danger);
+}
+
+.tool-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 12px 12px 35px;
+}
+
+.tool-sec-label {
+  margin-bottom: 4px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+.tool-sec.bad .tool-sec-label {
+  color: var(--danger);
+}
+
+.tool-sec-body {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--code-bg, var(--raise));
+  color: var(--text-2);
+  font: 11.5px/1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tool-sec-body.text {
+  font: 12.5px/1.5 var(--font);
+}
+
+.tool-sec.bad .tool-sec-body.text {
+  color: var(--danger);
+}
+
+.tool-sec-body .d-add {
+  color: var(--hl-addition);
+}
+
+.tool-sec-body .d-del {
+  color: var(--hl-deletion);
+}
+
+.tool-sec-body .d-hunk {
+  color: var(--hl-meta);
+}
+
+.tool-sec-body .d-meta {
+  color: var(--text-3);
 }
 
 .ellipsis::after {
@@ -3366,4 +3599,13 @@ button.ghost {
   opacity: 1;
   transform: none;
   transition-delay: 0.25s;
+}
+
+/* In tool boxes, JSON keys read apart from their string values. */
+.tool-sec-body .hljs-attr {
+  color: var(--hl-title);
+}
+
+.tool-sec-body .hljs-punctuation {
+  color: var(--text-3);
 }

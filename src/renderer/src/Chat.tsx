@@ -24,8 +24,10 @@ import {
 import { BotDayDivider, BotTime, localDay } from './botChat'
 import { CodeBlock } from './CodeBlock'
 import { hermes } from './bridge'
+import { Highlighted } from './highlight'
 import { ModelPicker } from './ModelPicker'
 import { clock } from './time'
+import { describeTool, splitPath, summarize, type ToolKind, type ToolView } from './toolView'
 import { splitRefs } from './transcript'
 import { BackToBotChat, WorkstreamsToggle } from './Workstreams'
 
@@ -123,38 +125,173 @@ const Markdown = memo(function Markdown({ text, botId }: { text: string; botId: 
 
 function ToolGroup({ tools, live }: { tools: ToolInfo[]; live: boolean }) {
   const [open, setOpen] = useState(false)
-  const running = tools.filter(t => !t.done)
-  const current = running[running.length - 1] ?? tools[tools.length - 1]!
-  const emojis = [...new Set(tools.map(t => t.emoji).filter(Boolean))].slice(0, 4)
+  const box = useRef<HTMLDivElement>(null)
+  const views = useMemo(() => tools.map(describeTool), [tools])
+  const runningAt = live ? tools.map(t => !t.done).lastIndexOf(true) : -1
+  const current = runningAt >= 0 ? views[runningAt]! : null
+  const summary = summarize(views)
+
+  // Opening the list scrolls it up into view, so the calls can be read without scrolling by hand.
+  useLayoutEffect(() => {
+    const el = box.current
+    const scroller = el?.closest('.scroller')
+    if (!open || !el || !scroller) return
+    const view = scroller.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    if (r.bottom <= view.bottom - 8) return
+    const top = scroller.scrollTop + (r.top - view.top) - 12
+    scroller.scrollTo({ top, behavior: 'smooth' })
+  }, [open])
+
   return (
-    <div className={`tools ${open ? 'open' : ''}`}>
-      <button className="tools-pill" onClick={() => setOpen(o => !o)}>
-        <span className="tools-emojis">{emojis.length ? emojis.join('') : '🔧'}</span>
-        {running.length && live ? (
+    <div className={`tools ${open ? 'open' : ''}`} ref={box}>
+      <button className="tools-pill" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className="tools-pill-icon">{current ? <Spinner /> : <ToolIcon kind="other" />}</span>
+        {current ? (
           <span className="tools-label">
-            {current.label}
-            <span className="ellipsis" />
+            <b>{current.verb}</b>
+            {current.detail && <span className={`tools-label-detail ${current.mono ? 'mono' : ''}`}>{current.path ? splitPath(current.detail).name : current.detail}</span>}
           </span>
         ) : (
           <span className="tools-label">
-            Used {tools.length} tool{tools.length === 1 ? '' : 's'}
+            <b>
+              Used {tools.length} tool{tools.length === 1 ? '' : 's'}
+            </b>
+            {summary && <span className="tools-label-detail">{summary}</span>}
           </span>
         )}
-        <span className="chev">{open ? '▾' : '▸'}</span>
+        <svg className="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3.5 2 6.5 5l-3 3" />
+        </svg>
       </button>
       {open && (
-        <ul className="tools-list">
-          {tools.map((t, i) => (
-            <li key={i} className={t.done ? '' : 'pending'}>
-              <span className="tool-emoji">{t.emoji ?? '•'}</span>
-              <span className="tool-name">{t.label}</span>
-              {t.preview && <span className="tool-preview">{t.preview}</span>}
-              {t.duration !== undefined && <span className="tool-dur">{t.duration.toFixed(1)}s</span>}
-            </li>
+        <ToolList>
+          {views.map((v, i) => (
+            <ToolRow key={i} v={v} tool={tools[i]!} running={live && !tools[i]!.done} />
           ))}
-        </ul>
+        </ToolList>
       )}
     </div>
+  )
+}
+
+function ToolRow({ v, tool, running }: { v: ToolView; tool: ToolInfo; running: boolean }) {
+  const [open, setOpen] = useState(false)
+  const more = v.sections.length > 0
+  const p = v.path ? splitPath(v.detail) : null
+  return (
+    <li className={`tool-row ${running ? 'running' : ''} ${open ? 'open' : ''} ${v.failed ? 'failed' : ''}`}>
+      <button className="tool-line" onClick={() => more && setOpen(o => !o)} aria-expanded={more ? open : undefined} disabled={!more}>
+        <span className="tool-icon">{running ? <Spinner /> : v.emoji ? <span className="tool-emoji">{v.emoji}</span> : <ToolIcon kind={v.kind} />}</span>
+        <span className="tool-verb">{v.verb}</span>
+        {p ? (
+          <span className="tool-detail file" title={v.detail}>
+            <span className="tool-file">{p.name}</span>
+            {p.dir && <span className="tool-dir">{p.dir}</span>}
+          </span>
+        ) : (
+          v.detail && (
+            <span className={`tool-detail ${v.mono ? 'mono' : ''}`} title={v.detail}>
+              {v.detail}
+            </span>
+          )
+        )}
+        {v.failed && <span className="tool-failed">Failed</span>}
+        {tool.duration !== undefined && <span className="tool-dur">{fmtDuration(tool.duration)}</span>}
+        {more && (
+          <svg className="tool-chev" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3.5 2 6.5 5l-3 3" />
+          </svg>
+        )}
+      </button>
+      {open && (
+        <div className="tool-details">
+          {v.sections.map((sec, i) => (
+            <div key={i} className={`tool-sec ${sec.bad ? 'bad' : ''}`}>
+              <div className="tool-sec-label">{sec.label}</div>
+              {sec.kind === 'diff' ? (
+                <pre className="tool-sec-body diff">
+                  {sec.text.split('\n').map((l, j) => (
+                    <span key={j} className={diffClass(l)}>
+                      {l}
+                      {'\n'}
+                    </span>
+                  ))}
+                </pre>
+              ) : (
+                <pre className={`tool-sec-body ${sec.kind}`}>{sec.kind === 'code' ? <Highlighted text={sec.text} lang={sec.lang} /> : sec.text}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </li>
+  )
+}
+
+const diffClass = (l: string) =>
+  l.startsWith('+++') || l.startsWith('---') || l.startsWith('***') ? 'd-meta' : l.startsWith('@@') ? 'd-hunk' : l.startsWith('+') ? 'd-add' : l.startsWith('-') ? 'd-del' : ''
+
+/** The list scrolls on its own past a height; a fade at either end says there's more that way. */
+function ToolList({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLOListElement>(null)
+  const [edges, setEdges] = useState({ top: false, bottom: false })
+  const measure = () => {
+    const el = ref.current
+    if (!el) return
+    const top = el.scrollTop > 2
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 2
+    setEdges(e => (e.top === top && e.bottom === bottom ? e : { top, bottom }))
+  }
+  useLayoutEffect(() => {
+    measure()
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    for (const c of el.children) ro.observe(c)
+    return () => ro.disconnect()
+  })
+  return (
+    <div className={`tool-list-wrap ${edges.top ? 'more-above' : ''} ${edges.bottom ? 'more-below' : ''}`}>
+      <ol className="tool-list" ref={ref} onScroll={measure}>
+        {children}
+      </ol>
+    </div>
+  )
+}
+
+const fmtDuration = (s: number) => (s < 10 ? `${s.toFixed(1)}s` : s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`)
+
+function Spinner() {
+  return (
+    <svg className="ws-spin" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <circle cx="8" cy="8" r="5.5" opacity="0.25" />
+      <path d="M8 2.5a5.5 5.5 0 0 1 5.5 5.5" />
+    </svg>
+  )
+}
+
+const ICON_PATHS: Record<ToolKind, string> = {
+  run: 'M2.5 3.5h11v9h-11zM5 7l1.8 1.5L5 10M8.5 10.2h2.5',
+  edit: 'M10.6 2.9l2.5 2.5-7.3 7.3-3.1.6.6-3.1zM9.3 4.2l2.5 2.5',
+  read: 'M4 2h5.5L12.5 5v9h-8.5zM9.5 2v3h3M6 8h4.5M6 10.5h4.5',
+  search: 'M7 2.8a4.2 4.2 0 1 1 0 8.4 4.2 4.2 0 0 1 0-8.4zM10.1 10.1l3.2 3.2',
+  web: 'M8 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2zM2 8h12M8 2c1.7 1.8 2.5 3.8 2.5 6S9.7 12.2 8 14C6.3 12.2 5.5 10.2 5.5 8S6.3 3.8 8 2z',
+  browser: 'M2 3h12v10H2zM2 6h12M4 4.5h.01M5.6 4.5h.01',
+  memory: 'M4.5 2.5h7v11L8 11l-3.5 2.5z',
+  agent: 'M5.5 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM2 13c0-2 1.6-3.5 3.5-3.5S9 11 9 13M11 4.5a1.7 1.7 0 1 1 0 3.4M12 9.6c1.2.4 2 1.6 2 3.4',
+  image: 'M2.5 3h11v10h-11zM2.5 10.5l3-3 3 3 2-2 3 3M10 5.5h.01',
+  todo: 'M2.5 4l1.2 1.2L6 3M2.5 9l1.2 1.2L6 8M8 4.2h5.5M8 9.2h5.5M8 13h5.5',
+  skill: 'M8 2l1.5 3.6 3.9.3-3 2.5.9 3.8L8 10.2l-3.3 2 .9-3.8-3-2.5 3.9-.3z',
+  other: 'M9.8 2.3a3.2 3.2 0 0 0-3.9 4.1L2.4 9.9a1.3 1.3 0 0 0 1.8 1.8l3.5-3.5a3.2 3.2 0 0 0 4.1-3.9l-1.9 1.9-1.6-.4-.4-1.6z'
+}
+
+function ToolIcon({ kind }: { kind: ToolKind }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={ICON_PATHS[kind]} />
+    </svg>
   )
 }
 

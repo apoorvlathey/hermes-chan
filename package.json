@@ -79,5 +79,8 @@
     },
     "asar": true,
     "artifactName": "${productName}-${version}-${arch}.${ext}"
+  },
+  "dependencies": {
+    "lowlight": "3.3.0"
   }
 }
