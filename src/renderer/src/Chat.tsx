@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { Avatar } from './Avatar'
 import {
   answerPrompt,
+  cancelReply,
   findSession,
   focusedKey,
   openSessionRef,
@@ -13,6 +14,7 @@ import {
   openSetup,
   send,
   setNewChatBot,
+  startReply,
   stop,
   useStore,
   type Bot,
@@ -28,7 +30,7 @@ import { Highlighted } from './highlight'
 import { ModelPicker } from './ModelPicker'
 import { clock } from './time'
 import { describeTool, splitPath, summarize, type ToolKind, type ToolView } from './toolView'
-import { splitRefs } from './transcript'
+import { splitRefs, type ReplyQuote } from './transcript'
 import { BackToBotChat, WorkstreamsToggle } from './Workstreams'
 
 const GREETINGS = [
@@ -419,6 +421,68 @@ function CronOutputCard({ item, bot }: { item: Extract<Item, { kind: 'cron' }>; 
   )
 }
 
+const REPLY_ICON = (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+    <path d="M6.5 3.5 2.5 7.5l4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M2.8 7.5h6.7a4 4 0 0 1 4 4v1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+)
+
+/** Markdown reduced to readable one-liner text for quote previews. */
+function plainQuote(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' [code] ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+|\d+\.\s+)/gm, '')
+    .replace(/(\*\*|__|`|~~)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Hover button that quote-replies to a message: the text selected inside it, or the whole message. */
+function ReplyButton({ text, own }: { text: string; own: boolean }) {
+  const pick = (btn: HTMLElement) => {
+    const sel = window.getSelection()
+    const msg = btn.closest('.msg')
+    const picked = sel && !sel.isCollapsed && msg && sel.anchorNode && msg.contains(sel.anchorNode) ? sel.toString().trim() : ''
+    startReply(picked || text, own)
+  }
+  return (
+    <span className="reply-hit">
+      <button
+        className="reply-btn"
+        title="Reply"
+        aria-label="Reply"
+        onMouseDown={e => e.preventDefault()}
+        onClick={e => pick(e.currentTarget)}
+      >
+        {REPLY_ICON}
+      </button>
+    </span>
+  )
+}
+
+/** The quoted message on top of a reply, like chat apps; click to jump to it. */
+function ReplyQuoteBlock({ reply, bot }: { reply: ReplyQuote; bot: Bot }) {
+  const jump = (el: HTMLElement) => {
+    const probe = plainQuote(reply.text).slice(0, 60)
+    const msgs = [...(el.closest('.thread')?.querySelectorAll<HTMLElement>(reply.own ? '.msg.bot' : '.msg.user') ?? [])]
+    const target = msgs.find(m => m !== el.closest('.msg') && plainQuote(m.innerText).includes(probe))
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.classList.remove('flash')
+    void target.offsetWidth
+    target.classList.add('flash')
+  }
+  return (
+    <button className="reply-quote" onClick={e => jump(e.currentTarget)} title="Show the original message">
+      <span className="reply-quote-who">{reply.own ? bot.name : 'You'}</span>
+      <span className="reply-quote-text">{plainQuote(reply.text)}</span>
+    </button>
+  )
+}
+
 function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles?: boolean }) {
   if (item.kind === 'user') {
     return (
@@ -441,6 +505,8 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
         ) : null}
         {item.text.trim() ? (
           <div className="bubble">
+            {item.reply && <ReplyQuoteBlock reply={item.reply} bot={bot} />}
+            {bubbles && <ReplyButton text={item.text} own={false} />}
             <span className="bubble-text">
               {splitRefs(item.text).map((part, i) =>
                 part.kind === 'text' ? part.text : <RefChip key={i} type={part.type} value={part.value} />
@@ -475,6 +541,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
             {!bubbles && item.ts ? <span className="report-time">{clock(item.ts)}</span> : null}
           </div>
         )}
+        {bubbles && !item.streaming && <ReplyButton text={item.text} own />}
         <Markdown text={item.text} botId={bot.id} />
         {bubbles && !item.streaming && <BotTime ts={item.ts} />}
       </div>
@@ -637,6 +704,11 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
   const ref = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const view = useStore(s => s.view)
+  const reply = useStore(s => (s.replyDraft && s.replyDraft.key === focusedKey(s) ? s.replyDraft : null))
+
+  useEffect(() => {
+    if (reply) ref.current?.focus()
+  }, [reply])
 
   useEffect(() => {
     ref.current?.focus()
@@ -692,6 +764,18 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
         </div>
       )}
       <div className={`composer ${drafts.length ? 'has-drafts' : ''}`} style={{ ['--bot' as string]: bot.color }}>
+        {reply && (
+          <div className="composer-reply">
+            <span className="composer-reply-icon">{REPLY_ICON}</span>
+            <span className="composer-reply-body">
+              <span className="composer-reply-who">Replying to {reply.own ? bot.name : 'yourself'}</span>
+              <span className="composer-reply-text">{plainQuote(reply.text)}</span>
+            </span>
+            <button className="composer-reply-x" onClick={cancelReply} title="Cancel reply  esc" aria-label="Cancel reply">
+              ×
+            </button>
+          </div>
+        )}
         {drafts.length > 0 && (
           <div className="drafts">
             {drafts.map(d => (
@@ -743,6 +827,11 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
             void addFiles(files)
           }}
           onKeyDown={e => {
+            if (e.key === 'Escape' && reply) {
+              e.preventDefault()
+              cancelReply()
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               submit()

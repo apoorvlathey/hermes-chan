@@ -3632,3 +3632,184 @@ button.ghost {
 .tool-sec-body .hljs-punctuation {
   color: var(--text-3);
 }
+
+/* ─── quote replies ─── */
+
+.bot-bubbles .msg.bot,
+.bot-bubbles .msg.user .bubble {
+  position: relative;
+}
+
+/* A hit strip beside the bubble, so the pointer can travel from the bubble to the button. */
+.reply-hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s var(--ease);
+}
+
+.msg.bot .reply-hit {
+  right: -44px;
+}
+
+.msg.user .reply-hit {
+  left: -44px;
+}
+
+.msg:hover .reply-hit,
+.reply-hit:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reply-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, transform 0.2s var(--spring);
+}
+
+.reply-btn:hover {
+  color: var(--text);
+  background: var(--raise-2);
+}
+
+.reply-btn:active {
+  transform: scale(0.9);
+}
+
+/* The quoted message inside a reply bubble. */
+.reply-quote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  margin: 1px 0 6px;
+  padding: 5px 10px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.reply-quote:hover {
+  background: color-mix(in srgb, var(--text) 11%, transparent);
+}
+
+.reply-quote-who {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bot);
+}
+
+.reply-quote-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+  word-break: break-word;
+}
+
+.bot-bubbles .msg.flash {
+  animation: reply-flash 1.4s var(--ease);
+}
+
+.bot-bubbles .msg.user.flash .bubble {
+  animation: reply-flash 1.4s var(--ease);
+}
+
+.bot-bubbles .msg.user.flash {
+  animation: none;
+}
+
+@keyframes reply-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bot) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
+/* What the composer is replying to. */
+.composer-reply {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 14px;
+  background: var(--raise);
+}
+
+.composer-reply-icon {
+  display: grid;
+  flex: none;
+  color: var(--bot);
+}
+
+.composer-reply-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.composer-reply-who {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.composer-reply-text {
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.composer-reply-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.composer-reply-x:hover {
+  background: var(--raise-2);
+  color: var(--text);
+}

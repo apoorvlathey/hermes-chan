@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
-import { cronOutput, cronReport, handoff, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
+import { cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -73,6 +73,8 @@ export type Item =
       /** Gateway-side paths of images in stored history (loaded lazily). */
       imagePaths?: string[]
       files?: string[]
+      /** The message this one quote-replies to. */
+      reply?: ReplyQuote
     }
   | { kind: 'assistant'; id: string; text: string; ts?: number; streaming?: boolean; report?: string }
   | { kind: 'tool'; id: string; tool: ToolInfo; ts?: number }
@@ -120,6 +122,8 @@ export interface Prompt {
 export type View = { kind: 'bot'; botId: string } | { kind: 'session'; key: string } | { kind: 'new'; botId: string }
 
 interface State {
+  /** The message the composer is replying to, for the chat it was picked in. */
+  replyDraft: (ReplyQuote & { key: string }) | null
   config: AppConfig | null
   statuses: Record<string, BotStatus>
   bots: Record<string, Bot>
@@ -160,6 +164,7 @@ const readJson = <T>(k: string, fallback: T): T => {
 const prefs = readJson<{ showRoutine?: boolean; lastBot?: string; showWorkstreams?: boolean }>(PREFS_KEY, {})
 
 let state: State = {
+  replyDraft: null,
   config: null,
   statuses: {},
   bots: {},
@@ -436,6 +441,11 @@ function parseResult(v: unknown): unknown {
 export const prettyTool = (name: string) =>
   (name || 'tool').replace(/^mcp_/, '').replace(/[_.]+/g, ' ').replace(/^\w/, c => c.toUpperCase())
 
+function userItem(shown: { text: string; images: string[] }, ts?: number): Item {
+  const { reply, text } = splitReply(shown.text)
+  return { kind: 'user', id: nid(), text, ts, ...(shown.images.length ? { imagePaths: shown.images } : {}), ...(reply ? { reply } : {}) }
+}
+
 function mapMessages(messages: any[]): Item[] {
   const out: Item[] = []
   for (const m of messages) {
@@ -455,13 +465,13 @@ function mapMessages(messages: any[]): Item[] {
       } else if (m.display_kind === 'steer') {
         // A message you sent while the bot was working, delivered into its running turn.
         const shown = userDisplay(unwrapSteer(raw))
-        if (shown?.text || shown?.images.length) out.push({ kind: 'user', id: nid(), text: shown.text, ts, ...(shown.images.length ? { imagePaths: shown.images } : {}) })
+        if (shown?.text || shown?.images.length) out.push(userItem(shown, ts))
       } else if (m.display_kind && m.display_kind !== 'user') {
         out.push({ kind: 'note', id: nid(), text: raw, ts })
       } else {
         const shown = userDisplay(typedAsk(m) ?? raw)
         if (shown && (shown.text || shown.images.length)) {
-          out.push({ kind: 'user', id: nid(), text: shown.text, ts, ...(shown.images.length ? { imagePaths: shown.images } : {}) })
+          out.push(userItem(shown, ts))
         }
       }
     } else if (m.role === 'assistant') {
@@ -619,15 +629,19 @@ export async function send(text: string, drafts: Draft[] = []) {
 
   const images = drafts.filter(d => d.kind === 'image')
   const files = drafts.filter(d => d.kind === 'file')
-  const userItem: Item = {
+  const draft = state.replyDraft?.key === key ? state.replyDraft : null
+  const reply: ReplyQuote | undefined = draft ? { text: draft.text, own: draft.own } : undefined
+  if (draft) set({ replyDraft: null })
+  const sent: Item = {
     kind: 'user',
     id: nid(),
     text,
     ts: Date.now() / 1000,
+    ...(reply ? { reply } : {}),
     ...(images.length ? { images: images.map(d => d.dataUrl) } : {}),
     ...(files.length ? { files: files.map(d => d.name) } : {})
   }
-  patchThread(key, th => ({ items: [...th.items, userItem], running: true, thinking: true, status: undefined, localTurn: true }))
+  patchThread(key, th => ({ items: [...th.items, sent], running: true, thinking: true, status: undefined, localTurn: true }))
 
   try {
     let liveId = t.liveId
@@ -672,7 +686,8 @@ export async function send(text: string, drafts: Draft[] = []) {
         })
       )
     ])
-    const body = [refs.join('\n'), text].filter(s => s.trim()).join('\n\n')
+    const typed = [refs.join('\n'), text].filter(s => s.trim()).join('\n\n')
+    const body = reply ? withReply(reply, typed) : typed
 
     // submission_id is the gateway's idempotency key for this turn (required on canonical gateways).
     await hermes.request(botId, 'prompt.submit', {
@@ -1024,6 +1039,15 @@ export function reorderBots(ids: string[]) {
   set({ config: { ...config, bots } })
   hermes.reorderBots(bots.map(b => b.id)).catch(err => console.warn('reorder failed', err))
 }
+
+/** Quote-reply to a message in the focused chat (`own`: it's the bot's message). */
+export function startReply(text: string, own: boolean) {
+  const key = focusedKey()
+  const quote = text.trim()
+  if (key && quote) set({ replyDraft: { key, text: quote, own } })
+}
+
+export const cancelReply = () => set({ replyDraft: null })
 
 export const openSetup = () => set({ setupOpen: true })
 export const closeSetup = () => set({ setupOpen: false })

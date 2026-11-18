@@ -190,3 +190,27 @@ export function handoff(raw: string): Handoff | null {
   }
   return null
 }
+
+// ─── quote replies ──────────────────────────────────────────────────────────────────────────────
+
+/** The reply pointer Hermes' own gateway puts on a Telegram/Discord reply (gateway/run_inbound.py
+ *  `_prepend_inbound_reply_context`), so the model reads a HermesChan reply the way it already knows:
+ *  `[Replying to your previous message: "<quoted>"]` (the bot's message) or `[Replying to: "<quoted>"]`. */
+const REPLY_RE = /^\[Replying to( your previous message)?: "([\s\S]*?)"\]\r?\n\r?\n/
+
+export interface ReplyQuote {
+  text: string
+  /** The quoted message was the bot's. */
+  own: boolean
+}
+
+export function withReply(quote: ReplyQuote, text: string): string {
+  return `[Replying to${quote.own ? ' your previous message' : ''}: "${quote.text}"]\n\n${text}`
+}
+
+/** Split a stored user message into its reply pointer (if any) and the user's words. */
+export function splitReply(text: string): { reply?: ReplyQuote; text: string } {
+  const m = REPLY_RE.exec(text)
+  if (!m) return { text }
+  return { reply: { own: !!m[1], text: m[2]! }, text: text.slice(m[0].length) }
+}
