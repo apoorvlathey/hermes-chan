@@ -1,7 +1,7 @@
 {
   "name": "hermes-chan-ui",
   "productName": "HermesChan",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "A small, friendly desktop chat for Hermes Agent bots",
   "license": "MIT",
