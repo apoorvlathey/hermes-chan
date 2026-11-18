@@ -3082,3 +3082,87 @@ button.ghost {
 .ws-more:hover {
   color: var(--text);
 }
+
+/* ─── chat skeleton (loading a conversation) ──────────────────────────────── */
+
+.chat-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-skeleton.bubbles {
+  gap: 10px;
+}
+
+.sk-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: rise 0.4s var(--ease) both;
+}
+
+.sk-line {
+  height: 11px;
+  border-radius: 99px;
+}
+
+.sk-time {
+  align-self: flex-end;
+  width: 34px;
+  height: 8px;
+  margin-top: 2px;
+  border-radius: 99px;
+  opacity: 0.7;
+}
+
+/* Bot Chat: messenger bubbles, the same shapes as real ones */
+.bubbles .sk-msg {
+  padding: 13px 14px 9px;
+  border: 1px solid var(--line);
+}
+
+.bubbles .sk-msg.bot {
+  align-self: flex-start;
+  border-radius: 20px 20px 20px 6px;
+  background: var(--panel);
+}
+
+.bubbles .sk-msg.user {
+  align-self: flex-end;
+  border-radius: 20px 20px 6px 20px;
+  background: color-mix(in srgb, var(--bot) 10%, var(--raise-2));
+  border-color: color-mix(in srgb, var(--bot) 18%, transparent);
+}
+
+/* Regular chat: your bubble on the right, the bot's paragraphs full width */
+.doc .sk-msg.user {
+  align-self: flex-end;
+  width: min(280px, 60%);
+  padding: 12px 14px;
+  border-radius: 18px 18px 6px 18px;
+  background: color-mix(in srgb, var(--bot) 10%, var(--raise-2));
+  border: 1px solid color-mix(in srgb, var(--bot) 18%, transparent);
+}
+
+.doc .sk-msg.bot {
+  padding: 4px 2px;
+}
+
+.doc .sk-line {
+  height: 12px;
+}
+
+.sk-tool {
+  width: 128px;
+  height: 26px;
+  margin-bottom: 4px;
+  border-radius: 99px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-msg,
+  .chat-skeleton .shimmer-box {
+    animation: none;
+  }
+}

@@ -172,6 +172,48 @@ function toBlocks(items: Item[]): Block[] {
   return out
 }
 
+/** Placeholder conversation while a chat loads: messenger bubbles for a Bot Chat, the document
+ *  layout (your bubble, then the bot's paragraphs) for a regular chat. Widths are fixed so it
+ *  doesn't jump around between renders. */
+const BUBBLE_SKELETON: { side: 'bot' | 'user'; width: number; lines: number[] }[] = [
+  { side: 'bot', width: 420, lines: [100, 86, 58] },
+  { side: 'user', width: 240, lines: [100] },
+  { side: 'bot', width: 360, lines: [100, 64] },
+  { side: 'user', width: 300, lines: [100, 46] },
+  { side: 'bot', width: 460, lines: [100, 94, 88, 40] }
+]
+const DOC_SKELETON: { side: 'bot' | 'user'; lines: number[]; tool?: boolean }[] = [
+  { side: 'user', lines: [100, 54] },
+  { side: 'bot', tool: true, lines: [100, 97, 92, 60] },
+  { side: 'bot', lines: [100, 88, 34] },
+  { side: 'user', lines: [100] },
+  { side: 'bot', lines: [100, 95, 72] }
+]
+
+function ChatSkeleton({ bubbles }: { bubbles: boolean }) {
+  const rows = bubbles ? BUBBLE_SKELETON : DOC_SKELETON
+  return (
+    <div className={`chat-skeleton ${bubbles ? 'bubbles' : 'doc'}`} role="status" aria-label="Loading conversation">
+      {rows.map((r, i) => (
+        <div
+          key={i}
+          className={`sk-msg ${r.side}`}
+          style={{
+            animationDelay: `${i * 70}ms`,
+            ...('width' in r && bubbles ? { width: `min(${r.width}px, 80%)` } : {})
+          }}
+        >
+          {'tool' in r && r.tool && <div className="sk-tool shimmer-box" />}
+          {r.lines.map((w, j) => (
+            <div key={j} className="sk-line shimmer-box" style={{ width: `${w}%` }} />
+          ))}
+          {bubbles && <div className="sk-time shimmer-box" />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles?: boolean }) {
   if (item.kind === 'user') {
     return (
@@ -654,7 +696,7 @@ export function Chat() {
         }}
       >
         <div className={`thread ${bubbles ? 'bot-bubbles' : ''}`}>
-          {thread?.loading && <div className="loading shimmer">Loading conversation…</div>}
+          {thread?.loading && <ChatSkeleton bubbles={bubbles} />}
           {thread?.error && <div className="note error">{thread.error}</div>}
 
           {isNew && (

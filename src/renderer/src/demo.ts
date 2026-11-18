@@ -267,6 +267,9 @@ export function demoBridge(real: HermesBridge): HermesBridge {
         return { sessions: params.scope === 'stored' ? ROWS.filter(r => r.bot === id).map(sessionRow) : [], scope: params.scope ?? 'live' }
       case 'session.resume': {
         const sid = String(params.session_id)
+        // A short, realistic wait so the loading skeleton shows; `localStorage['hermes-chan.demoLatency']`
+        // (ms) holds it longer for screenshots.
+        await new Promise(r => setTimeout(r, Number(localStorage.getItem('hermes-chan.demoLatency')) || 300))
         return {
           session_id: sid,
           messages: TRANSCRIPTS[sid] ?? [user('(demo chat)', minsAgo(60)), bot('This is a demo conversation.', minsAgo(59))],
