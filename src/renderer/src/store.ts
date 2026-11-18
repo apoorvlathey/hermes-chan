@@ -253,6 +253,18 @@ function markSeen(key: string, ts = Date.now() / 1000) {
   set(s => ({ seen: { ...s.seen, [key]: ts } }))
 }
 
+/** Unread chats in the sidebar (pinned and listed). */
+export function unreadSessions(s: State = state): SessionRow[] {
+  return [...pinnedSessions(s), ...visibleSessions(s)].filter(r => isUnread(r.key, r.lastActive, s))
+}
+
+/** Mark every unread chat in the sidebar as read. */
+export function markAllRead() {
+  const rows = unreadSessions()
+  if (!rows.length) return
+  set(s => ({ seen: { ...s.seen, ...Object.fromEntries(rows.map(r => [r.key, Math.max(r.lastActive, Date.now() / 1000)])) } }))
+}
+
 const isRoutine = (r: { source: string; title: string }, hidden: string[]) =>
   hidden.includes(r.source) || r.title.startsWith('[bot:')
 

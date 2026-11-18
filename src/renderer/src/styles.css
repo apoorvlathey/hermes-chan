@@ -3286,3 +3286,84 @@ button.ghost {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.h4-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.read-all {
+  gap: 0;
+}
+
+/* Just the double check until you hover it; then "Read all" slides out. */
+.read-all-label {
+  display: inline-block;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.2s var(--ease), margin-left 0.2s var(--ease), opacity 0.15s var(--ease);
+}
+
+.read-all:not(.idle):hover .read-all-label,
+.read-all:not(.idle):focus-visible .read-all-label {
+  max-width: 60px;
+  margin-left: 5px;
+  opacity: 1;
+}
+
+/* Nothing unread: dimmed, no hover fill, the tooltip says "All chats are read". */
+.read-all.idle {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.read-all.idle:hover {
+  background: none;
+  color: var(--text-3);
+}
+
+.read-all {
+  position: relative;
+}
+
+.read-all[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  padding: 4px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font: 500 11.5px var(--font);
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--text-2);
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 0.12s var(--ease), transform 0.12s var(--ease);
+}
+
+/* The dimmed button would dim its tooltip too; undo that for the tooltip. */
+.read-all.idle {
+  opacity: 1;
+}
+
+.read-all.idle svg {
+  opacity: 0.45;
+}
+
+.read-all[data-tip]:hover::after,
+.read-all[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.25s;
+}

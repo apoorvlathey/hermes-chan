@@ -5,6 +5,8 @@ import {
   botBusy,
   botUnread,
   hiddenRoutineCount,
+  markAllRead,
+  unreadSessions,
   isUnread,
   movePinned,
   newChat,
@@ -183,6 +185,7 @@ function SessionList() {
   const rows = useStore(s => visibleSessions(s))
   const pinned = useStore(s => pinnedSessions(s))
   const hidden = useStore(s => hiddenRoutineCount(s))
+  const unread = useStore(s => unreadSessions(s).length)
   const showRoutine = useStore(s => s.showRoutine)
   const search = useStore(s => s.search)
   const anyLoaded = useStore(s => Object.keys(s.sessions).length > 0)
@@ -202,7 +205,25 @@ function SessionList() {
     else groups.push({ label, rows: [r] })
   }
 
-  // Sits on the first date header's line (e.g. "Today ……… ⚙︎ 12 hidden").
+  // Sits on the first date header's line (e.g. "Today ……… ✓✓ Read all  ⚙︎ 12 hidden").
+  // Always there; with nothing unread it's dimmed and a small tooltip says so on hover (drawn in CSS:
+  // Electron's native title tooltips don't show reliably). aria-disabled keeps it hoverable.
+  const readAll = (
+    <button
+      className={`routine-toggle read-all ${unread ? '' : 'idle'}`}
+      onClick={() => unread && markAllRead()}
+      aria-disabled={!unread}
+      title={unread ? `Mark ${unread} unread chat${unread === 1 ? '' : 's'} as read` : undefined}
+      data-tip={unread ? undefined : 'All chats are read'}
+      aria-label={unread ? 'Mark all as read' : 'All chats are read'}
+    >
+      <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M1 5.4 3.6 8 9 2" />
+        <path d="M7.2 7.4 7.8 8 13.2 2" />
+      </svg>
+      <span className="read-all-label">Read all</span>
+    </button>
+  )
   const toggle =
     hidden > 0 ? (
       <button
@@ -226,14 +247,26 @@ function SessionList() {
         <section key={g.label}>
           <h4>
             <span>{g.label}</span>
-            {i === 0 && toggle}
+            {i === 0 && (
+              <span className="h4-actions">
+                {readAll}
+                {toggle}
+              </span>
+            )}
           </h4>
           {g.rows.map(r => (
             <SessionItem key={r.key} row={r} drag={drag} />
           ))}
         </section>
       ))}
-      {groups.length === 0 && toggle && <h4>{toggle}</h4>}
+      {groups.length === 0 && anyLoaded && (
+        <h4>
+          <span className="h4-actions">
+            {readAll}
+            {toggle}
+          </span>
+        </h4>
+      )}
     </div>
   )
 }
