@@ -153,6 +153,9 @@ export function noteFence(botId: string, liveId: string, revision?: unknown, gen
   })
 }
 
+/** The latest execution generation seen for this live session (0 when none yet). */
+export const knownGeneration = (botId: string, liveId: string) => fences.get(`${botId}:${liveId}`)?.generation ?? 0
+
 function freshFences(err: any): { revision?: number; generation?: number } {
   const d = err?.data ?? {}
   const src = d.data ?? d

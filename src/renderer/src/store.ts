@@ -4,7 +4,7 @@ import { useRef, useSyncExternalStore } from 'react'
 
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
-import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, loadSessionModel, type ModelPick, noteFence } from './models'
+import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
 import { cronReport, humanJobName, typedAsk, userDisplay } from './transcript'
 
 
@@ -649,11 +649,39 @@ export async function send(text: string, drafts: Draft[] = []) {
   }
 }
 
+/** Stop the running turn. The gateway only takes a Stop that names the turn's execution generation
+ *  (anything else is refused as stale_generation), so send the one we know and, when it's stale (the
+ *  turn started after our last event, or another client started it), read the current one and retry. */
 export async function stop() {
   const key = focusedKey()
   const t = key ? state.threads[key] : null
   if (!t?.liveId) return
-  await hermes.request(t.botId, 'session.interrupt', { session_id: t.liveId }).catch(() => undefined)
+  const { botId, liveId } = t
+  const interrupt = (generation: number) =>
+    hermes.request<any>(botId, 'session.interrupt', { session_id: liveId, execution_generation: generation })
+  try {
+    try {
+      await interrupt(knownGeneration(botId, liveId))
+    } catch (err) {
+      if (rpcReason(err) !== 'stale_generation') throw err
+      const snap = await hermes.request<any>(botId, 'session.resume', { session_id: liveId })
+      noteFence(botId, liveId, snap.revision, snap.execution_generation)
+      if (!(snap.running ?? snap.info?.running)) {
+        patchThread(key!, () => ({ running: false, thinking: false }))
+        return
+      }
+      await interrupt(knownGeneration(botId, liveId))
+    }
+  } catch (err) {
+    patchThread(key!, th => ({
+      items: [...th.items, { kind: 'note', id: nid(), tone: 'error', text: `Couldn't stop: ${(err as Error).message}` }]
+    }))
+  }
+}
+
+const rpcReason = (err: unknown): string | undefined => {
+  const d = (err as { data?: any })?.data
+  return d?.reason ?? d?.data?.reason ?? ((err as Error)?.message === 'stale_generation' ? 'stale_generation' : undefined)
 }
 
 // ─── prompts (approvals / clarify) ──────────────────────────────────────────────────────────────
