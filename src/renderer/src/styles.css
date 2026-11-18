@@ -3166,3 +3166,28 @@ button.ghost {
     animation: none;
   }
 }
+
+.back-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+
+.back-btn:hover {
+  background: var(--raise);
+  color: var(--text);
+}
+
+.back-btn:active {
+  transform: translateX(-1px) scale(0.96);
+}

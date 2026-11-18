@@ -27,7 +27,7 @@ import { hermes } from './bridge'
 import { ModelPicker } from './ModelPicker'
 import { clock } from './time'
 import { splitRefs } from './transcript'
-import { WorkstreamsToggle } from './Workstreams'
+import { BackToBotChat, WorkstreamsToggle } from './Workstreams'
 
 const GREETINGS = [
   'What are we getting into?',
@@ -678,6 +678,7 @@ export function Chat() {
         </div>
       )}
       <header className="chat-head">
+        <BackToBotChat />
         <Avatar bot={bot} size={28} />
         <div className="chat-titles">
           <div className="chat-title">{title}</div>

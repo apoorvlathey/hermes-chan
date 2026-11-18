@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 
 import type { Workstream } from '../../shared/types'
-import { focusedKey, isActiveWork, loadWorkstreams, openSessionRef, threadKey, toggleWorkstreams, useStore } from './store'
+import { focusedKey, isActiveWork, loadWorkstreams, openBot, openSessionRef, threadKey, toggleWorkstreams, useStore } from './store'
 
 const POLL_MS = 15_000
 const RECENT = 4
@@ -42,6 +42,25 @@ export function usePanelBot(): string | null {
     const list = s.workstreams[botId] ?? []
     return list.some(w => w.sessionId && threadKey(botId, w.sessionId) === v.key) ? botId : null
   })
+}
+
+/** In a workstream's chat: a back arrow to its bot's Bot Chat, left of the avatar in the header. */
+export function BackToBotChat() {
+  const botId = useStore(s => {
+    const v = s.view
+    if (v?.kind !== 'session') return null
+    const id = s.threads[v.key]?.botId
+    return id && (s.workstreams[id] ?? []).some(w => w.sessionId && threadKey(id, w.sessionId) === v.key) ? id : null
+  })
+  const name = useStore(s => (botId ? s.bots[botId]?.name : undefined))
+  if (!botId) return null
+  return (
+    <button className="back-btn" onClick={() => openBot(botId)} title={`Back to ${name ?? 'Bot Chat'}`} aria-label="Back to Bot Chat">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M10 3.5 5.5 8l4.5 4.5" />
+      </svg>
+    </button>
+  )
 }
 
 /** Keep a bot's list fresh while its panel could be on screen. */
