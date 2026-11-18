@@ -116,6 +116,13 @@ const cronReport = (job: string, text: string, ts: number) => ({
   timestamp: ts
 })
 
+const cronOutput = (job: string, text: string, ts: number) => ({
+  role: 'user',
+  display_kind: 'internal_notification',
+  text: `[Cronjob "[bot:default] ${job}" output — scheduled job, not the user. Review it, act on anything that needs action, and summarize for the chat.]\n\n${text}`,
+  timestamp: ts
+})
+
 const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
 // A workstream as the Conduit plugin writes it: the coordinator's brief opens it, follow-ups arrive
@@ -158,6 +165,12 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
       `**${todayLabel}**\n\n- ☀️ 17°C and clear, good day for a run before 9\n- 📅 Design review at 11:00, 1:1 with Maya at 16:30\n- ✈️ Lisbon fares dipped to **€198**\n- ✅ Due today: passport photo, reply to Maya, book the dentist`,
       at(0, 8, 0)
     ),
+    cronOutput(
+      'Fare watch',
+      '## Lisbon fares | 14–21 Dec\n\n**Cheapest:** €198 return, direct, down from €212.\n\n### Options\n\n| Carrier | Out | Back | Price |\n|---|---|---|---|\n| TAP | 07:10 | 19:40 | €198 |\n| easyJet | 11:25 | 21:05 | €204 |\n| BA | 08:00 | 17:55 | €231 |\n\nThreshold is €190, so no alert sent.',
+      at(0, 8, 30)
+    ),
+    bot('Lisbon fares dipped to **€198** this morning, still above your €190 alert line. Nothing to do yet.', at(0, 8, 31)),
     user('nice. move the dentist to thursday and draft a reply to maya', at(0, 9, 12)),
     tool('📅', 'Calendar Update', 'Dentist → Thu 10:30', at(0, 9, 12)),
     tool('✉️', 'Mail Draft', 'Re: coffee next week?', at(0, 9, 13)),

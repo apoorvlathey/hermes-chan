@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
-import { cronReport, handoff, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
+import { cronOutput, cronReport, handoff, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ export type Item =
   | { kind: 'tool'; id: string; tool: ToolInfo; ts?: number }
   | { kind: 'note'; id: string; text: string; tone?: 'error' | 'info'; ts?: number }
   /** A coordinator's task or follow-up in a workstream (Conduit plugin), not the user's own words. */
+  | { kind: 'cron'; id: string; job: string; text: string; failed?: boolean; ts?: number }
   | { kind: 'handoff'; id: string; from: string; type: 'brief' | 'follow-up'; text: string; quote?: string; ts?: number }
 
 export interface Thread {
@@ -443,8 +444,11 @@ function mapMessages(messages: any[]): Item[] {
       const raw = typeof m.display_content === 'string' ? m.display_content : textOf(m)
       if (m.display_kind === 'hidden' || !raw) continue
       const report = cronReport(m, raw)
-      const passed = report ? null : handoff(raw)
-      if (report) {
+      const output = report ? null : cronOutput(m, raw)
+      const passed = report || output ? null : handoff(raw)
+      if (output) {
+        out.push({ kind: 'cron', id: nid(), ts, job: humanJobName(output.jobName), text: output.text, failed: output.failed })
+      } else if (report) {
         out.push({ kind: 'assistant', id: nid(), text: report.text, ts, report: humanJobName(report.jobName) })
       } else if (passed) {
         out.push({ kind: 'handoff', id: nid(), ts, ...passed })

@@ -387,6 +387,38 @@ function HandoffCard({ item, bot }: { item: Extract<Item, { kind: 'handoff' }>; 
   )
 }
 
+/** A scheduled job's output, handed to the bot to review. The bot's own summary follows it, so the raw
+ *  output starts folded. */
+function CronOutputCard({ item, bot }: { item: Extract<Item, { kind: 'cron' }>; bot: Bot }) {
+  const long = item.text.length > 280 || item.text.split('\n').length > 4
+  const [open, setOpen] = useState(!long)
+  return (
+    <section className={`handoff cron-output ${item.failed ? 'failed' : ''}`}>
+      <header className="handoff-head">
+        <svg className="cron-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+          <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M8 4.6V8l2.3 1.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="handoff-from">{item.job}</span>
+        <span className="handoff-kind">{item.failed ? 'Scheduled job failed' : 'Scheduled job output'}</span>
+        {item.ts ? <span className="handoff-time">{clock(item.ts)}</span> : null}
+      </header>
+      {item.text && (
+        <div className="handoff-main">
+          <div className={`handoff-body ${open ? '' : 'folded'}`}>
+            <Markdown text={item.text} botId={bot.id} />
+          </div>
+          {long && (
+            <button className="handoff-more" onClick={() => setOpen(o => !o)}>
+              {open ? 'Show less' : 'Show full output'}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles?: boolean }) {
   if (item.kind === 'user') {
     return (
@@ -426,6 +458,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
     return <div className={`note ${item.tone ?? ''}`}>{item.text}</div>
   }
   if (item.kind === 'handoff') return <HandoffCard item={item} bot={bot} />
+  if (item.kind === 'cron') return <CronOutputCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
     return (
       <div

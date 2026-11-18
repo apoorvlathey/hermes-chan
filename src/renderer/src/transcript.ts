@@ -115,6 +115,18 @@ export function cronReport(m: { role: string; display_kind?: string | null; disp
   return header ? { jobName: header[1]!, text: text.slice(header[0].length) } : null
 }
 
+const CRON_OUTPUT_RE = /^\[Cronjob "((?:[^"\r\n]|"(?! output))+)" output[^\]\r\n]*\]\r?\n?/
+
+/** A scheduled job's raw output handed to the bot to review (it then writes its own summary). Stored as
+ *  an internal-notification `user` row headed `[Cronjob "<job>" output — scheduled job, not the user. …]`. */
+export function cronOutput(m: { role: string; display_kind?: string | null }, text: string) {
+  if (m.role !== 'user' || (m.display_kind && m.display_kind !== 'internal_notification')) return null
+  const header = CRON_OUTPUT_RE.exec(text.trimStart())
+  if (!header) return null
+  const body = text.trimStart().slice(header[0].length).trim()
+  return { jobName: header[1]!, text: body, failed: /^⚠️\s*Cron\b[^\n]*\bfailed\b/i.test(body) }
+}
+
 /** "[bot:default] Email checks (5min) and hourly discovery" → "Email checks (5min) and hourly discovery" */
 export const humanJobName = (name: string) => name.replace(/^\[bot:[^\]]*\]\s*/, '').trim() || name
 

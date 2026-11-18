@@ -3533,6 +3533,16 @@ button.ghost {
   text-underline-offset: 3px;
 }
 
+.cron-icon {
+  flex: none;
+  color: var(--text-3);
+}
+
+.cron-output.failed .handoff-kind,
+.cron-output.failed .cron-icon {
+  color: var(--danger);
+}
+
 .h4-actions {
   display: inline-flex;
   align-items: center;
