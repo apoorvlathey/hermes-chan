@@ -1007,6 +1007,20 @@ export function movePinned(key: string, index: number) {
   set(s => ({ pinOrder: [...current, ...s.pinOrder.filter(k => !current.includes(k))] }))
 }
 
+/** Put the bots in this order (ids, first to last) and save it to the config. */
+export function reorderBots(ids: string[]) {
+  const config = state.config
+  if (!config) return
+  const rank = (id: string) => {
+    const i = ids.indexOf(id)
+    return i < 0 ? ids.length : i
+  }
+  const bots = [...config.bots].sort((a, b) => rank(a.id) - rank(b.id))
+  if (bots.every((b, i) => b.id === config.bots[i].id)) return
+  set({ config: { ...config, bots } })
+  hermes.reorderBots(bots.map(b => b.id)).catch(err => console.warn('reorder failed', err))
+}
+
 export const openSetup = () => set({ setupOpen: true })
 export const closeSetup = () => set({ setupOpen: false })
 

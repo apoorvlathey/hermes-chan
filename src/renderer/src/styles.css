@@ -207,6 +207,19 @@ textarea {
   background: color-mix(in srgb, var(--bot) 14%, transparent);
 }
 
+.bot-tile.dragging {
+  opacity: 0.35;
+}
+
+/* While reordering, the tiles hold still instead of reacting to the pointer passing over them. */
+.bots.reordering .bot-tile:hover {
+  background: transparent;
+}
+
+.bots.reordering .bot-tile:hover .avatar {
+  transform: none;
+}
+
 .bot-tile.offline .avatar {
   filter: grayscale(0.85) opacity(0.55);
 }

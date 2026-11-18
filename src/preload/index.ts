@@ -40,6 +40,7 @@ const bridge: HermesBridge = {
   setupScanRemote: host => ipcRenderer.invoke('setup:scan-remote', host),
   setupSshHosts: () => ipcRenderer.invoke('setup:ssh-hosts'),
   setupSave: bots => ipcRenderer.invoke('setup:save', bots),
+  reorderBots: ids => ipcRenderer.invoke('hermes:reorder-bots', ids),
   respond: (botId, id, result) => ipcRenderer.invoke('hermes:respond', botId, id, result),
   onEvent: listen('hermes:event'),
   onRequest: listen('hermes:request'),

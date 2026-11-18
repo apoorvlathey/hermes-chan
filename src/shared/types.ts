@@ -91,6 +91,8 @@ export interface HermesBridge {
   setupSshHosts(): Promise<string[]>
   /** Writes ~/.hermes-chan/config.json, reconnects every bot and reloads the window. */
   setupSave(bots: BotConfig[]): Promise<void>
+  /** Saves a new order for the configured bots (ids, first to last); connections stay up. */
+  reorderBots(ids: string[]): Promise<void>
   /** Rebuild a bot's connection from scratch (or every offline bot when omitted). */
   reconnect(botId?: string): Promise<void>
   /** Hermes Desktop's favourite models (`provider::model`) and per-model presets. */

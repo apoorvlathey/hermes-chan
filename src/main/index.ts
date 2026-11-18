@@ -89,6 +89,15 @@ ipcMain.handle('setup:save', async (_e, next: BotConfig[]) => {
   startBots()
   win?.webContents.reload()
 })
+ipcMain.handle('hermes:reorder-bots', (_e, ids: string[]) => {
+  if (DEMO || !Array.isArray(ids)) return
+  const rank = (id: string) => {
+    const i = ids.indexOf(id)
+    return i < 0 ? ids.length : i
+  }
+  config = { ...config, bots: [...config.bots].sort((a, b) => rank(a.id) - rank(b.id)) }
+  saveConfig(config)
+})
 ipcMain.handle('hermes:config-path', () => CONFIG_PATH)
 ipcMain.handle('hermes:statuses', () => [...bots.values()].map(b => b.status))
 ipcMain.handle('hermes:request', (_e, botId: string, method: string, params: Record<string, unknown>) => {

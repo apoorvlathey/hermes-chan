@@ -410,6 +410,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     },
     setupSshHosts: async () => ['home-server', 'build-box'],
     setupSave: async () => undefined,
+    reorderBots: async () => undefined,
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
     readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),
     workstreams: async botId => WORKSTREAMS[botId] ?? [],

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 
 import { Avatar } from './Avatar'
 import {
@@ -15,6 +15,7 @@ import {
   openSession,
   pinnedSessions,
   reconnectBot,
+  reorderBots,
   setPinned,
   setSearch,
   toggleRoutine,
@@ -24,6 +25,8 @@ import {
 } from './store'
 import { ago, bucket } from './time'
 
+const BOT_DRAG_TYPE = 'application/x-hermeschan-bot'
+
 function BotsRow() {
   const config = useStore(s => s.config)
   const bots = useStore(s => s.bots)
@@ -32,19 +35,76 @@ function BotsRow() {
   const unread = useStore(s => Object.fromEntries(Object.values(s.bots).map(b => [b.id, botUnread(b, s)])))
   const busy = useStore(s => Object.fromEntries(Object.keys(s.bots).map(id => [id, botBusy(id, s)])))
 
+  // Drag a tile to reorder: the row rearranges live while dragging, and the order saves on drop.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [order, setOrder] = useState<string[] | null>(null)
+  const ids = order ?? config?.bots.map(b => b.id) ?? []
+  const tiles = useRef(new Map<string, HTMLElement>())
+  const lastX = useRef(new Map<string, number>())
+
+  // Slide tiles from their old spot to the new one when the order changes (FLIP).
+  useLayoutEffect(() => {
+    for (const [id, el] of tiles.current) {
+      const x = el.getBoundingClientRect().left
+      const before = lastX.current.get(id)
+      lastX.current.set(id, x)
+      if (before === undefined || before === x || id === dragId) continue
+      el.animate([{ transform: `translateX(${before - x}px)` }, { transform: 'none' }], {
+        duration: 180,
+        easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+      })
+    }
+  })
+
+  const moveOver = (overId: string, clientX: number) => {
+    if (!dragId || overId === dragId) return
+    const el = tiles.current.get(overId)
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const next = ids.filter(id => id !== dragId)
+    const at = next.indexOf(overId) + (clientX > r.left + r.width / 2 ? 1 : 0)
+    next.splice(at, 0, dragId)
+    if (next.some((id, i) => id !== ids[i])) setOrder(next)
+  }
+
+  const endDrag = () => {
+    if (order) reorderBots(order)
+    setDragId(null)
+    setOrder(null)
+  }
+
   return (
-    <div className="bots">
-      {config?.bots.map((cfg, i) => {
-        const bot = bots[cfg.id]
-        if (!bot) return null
+    <div className={`bots ${dragId ? 'reordering' : ''}`}>
+      {ids.map((id, i) => {
+        const cfg = config?.bots.find(b => b.id === id)
+        const bot = bots[id]
+        if (!cfg || !bot) return null
         const st = statuses[cfg.id]?.state ?? 'connecting'
         const active = view?.kind === 'bot' && view.botId === cfg.id
         return (
           <button
             key={cfg.id}
-            className={`bot-tile ${active ? 'active' : ''} ${busy[cfg.id] ? 'busy' : ''} ${st !== 'ready' ? 'offline' : ''}`}
+            ref={el => {
+              if (el) tiles.current.set(cfg.id, el)
+              else tiles.current.delete(cfg.id)
+            }}
+            draggable
+            onDragStart={e => {
+              e.dataTransfer.setData(BOT_DRAG_TYPE, cfg.id)
+              e.dataTransfer.effectAllowed = 'move'
+              setDragId(cfg.id)
+            }}
+            onDragOver={e => {
+              if (!dragId) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              moveOver(cfg.id, e.clientX)
+            }}
+            onDrop={e => e.preventDefault()}
+            onDragEnd={endDrag}
+            className={`bot-tile ${active ? 'active' : ''} ${busy[cfg.id] ? 'busy' : ''} ${st !== 'ready' ? 'offline' : ''} ${dragId === cfg.id ? 'dragging' : ''}`}
             onClick={() => openBot(cfg.id)}
-            title={`${bot.name}${bot.description ? ` — ${bot.description}` : ''}  ⌘${i + 1}`}
+            title={`${bot.name}${bot.description ? ` — ${bot.description}` : ''}  ⌘${i + 1} · drag to reorder`}
             style={{ ['--bot' as string]: bot.color }}
           >
             <span className="bot-avatar-wrap">
