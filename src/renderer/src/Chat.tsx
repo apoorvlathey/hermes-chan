@@ -27,6 +27,7 @@ import { hermes } from './bridge'
 import { ModelPicker } from './ModelPicker'
 import { clock } from './time'
 import { splitRefs } from './transcript'
+import { WorkstreamsToggle } from './Workstreams'
 
 const GREETINGS = [
   'What are we getting into?',
@@ -641,6 +642,7 @@ export function Chat() {
           <div className="chat-sub">{subtitle}</div>
         </div>
         <ModelPicker threadKey={key} bot={bot} />
+        <WorkstreamsToggle />
       </header>
 
       <div

@@ -4,6 +4,7 @@ import { Chat } from './Chat'
 import { Setup } from './Setup'
 import { Sidebar } from './Sidebar'
 import { getState, newChat, openBot, useStore } from './store'
+import { WorkstreamsPanel } from './Workstreams'
 
 export function App() {
   const view = useStore(s => s.view)
@@ -37,7 +38,16 @@ export function App() {
   return (
     <div className="app">
       <Sidebar />
-      <main className="main">{view ? <Chat /> : <div className="boot">Waking the bots…</div>}</main>
+      <main className="main">
+        {view ? (
+          <div className="main-split">
+            <Chat />
+            <WorkstreamsPanel />
+          </div>
+        ) : (
+          <div className="boot">Waking the bots…</div>
+        )}
+      </main>
       {setupOpen && (
         <div className="setup-overlay">
           <Setup firstRun={false} />

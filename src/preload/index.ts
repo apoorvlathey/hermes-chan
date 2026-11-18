@@ -33,6 +33,7 @@ const bridge: HermesBridge = {
   request: (botId, method, params = {}) => unwrap(ipcRenderer.invoke('hermes:request', botId, method, params)),
   uploadImage: (botId, dataUrl, filename) => unwrap(ipcRenderer.invoke('hermes:upload-image', botId, dataUrl, filename)),
   readDataUrl: (botId, filePath) => unwrap(ipcRenderer.invoke('hermes:read-data-url', botId, filePath)),
+  workstreams: botId => unwrap(ipcRenderer.invoke('hermes:workstreams', botId)),
   desktopModelPrefs: () => ipcRenderer.invoke('hermes:desktop-model-prefs'),
   reconnect: botId => ipcRenderer.invoke('hermes:reconnect', botId),
   setupScanLocal: () => ipcRenderer.invoke('setup:scan-local'),

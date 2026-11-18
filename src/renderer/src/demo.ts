@@ -1,7 +1,7 @@
 /** Demo mode (`pnpm demo`): a fake Hermes backend with made-up bots, chats and models, so the UI can
  *  be shown or screenshotted without connecting to any gateway or exposing real history. The main
  *  process starts no connections and uses a separate userData folder in this mode. */
-import type { BotStatus, HermesBridge } from '../../shared/types'
+import type { BotStatus, HermesBridge, Workstream } from '../../shared/types'
 
 export const IS_DEMO = new URLSearchParams(location.search).has('demo')
 /** `?demo=onboarding`: no bots yet, so the app opens on its first-run setup screen. */
@@ -31,6 +31,25 @@ const BOTS = [
 ] as const
 
 type BotId = (typeof BOTS)[number]['id']
+
+// ─── workstreams (the Conduit plugin's background tasks) ─────────────────────────────────────────
+
+const step = (step: string, state: 'done' | 'doing' | 'todo') => ({ step, state })
+const work = (ref: string, status: string, title: string, steps: { step: string; state: string }[], updated: number, closed = 0): Workstream => ({
+  ref, status, title, steps, sessionId: `work-${ref.toLowerCase()}`, lastResult: '', error: '', createdAt: updated - 1800, updatedAt: updated, closedAt: closed
+})
+const WORKSTREAMS: Partial<Record<string, Workstream[]>> = {
+  atlas: [
+    work('W7', 'running', 'Book the Lisbon flights and a quiet stay near Alfama', [step('Compare fares for the 14th', 'done'), step('Shortlist three guesthouses', 'doing'), step('Hold the best pair', 'todo'), step('Send the summary', 'todo')], minsAgo(4)),
+    work('W6', 'ready', 'Draft the Q3 board update from the metrics sheet', [step('Pull the numbers', 'done'), step('Write the narrative', 'done'), step('Check every figure', 'done')], minsAgo(35)),
+    work('W5', 'waiting', 'Get Pixel to refresh the deck cover', [step('Brief Pixel', 'done'), step('Review the options', 'todo')], minsAgo(52)),
+    work('W4', 'done', 'Fix the flaky integration tests on the api repo', [], minsAgo(180), minsAgo(170)),
+    work('W3', 'done', 'Renew the domain and move DNS to the new host', [], at(1, 16, 20), at(1, 16, 40)),
+    work('W2', 'failed', 'Export last year\'s receipts to the accountant folder', [], at(2, 10, 5), at(2, 10, 9)),
+    work('W1', 'done', 'Summarise the inbox backlog by sender', [], at(3, 9, 0), at(3, 9, 30))
+  ]
+}
+WORKSTREAMS.atlas![5]!.error = 'The accountant folder is read-only'
 
 // ─── chats ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -251,7 +270,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
         return {
           session_id: sid,
           messages: TRANSCRIPTS[sid] ?? [user('(demo chat)', minsAgo(60)), bot('This is a demo conversation.', minsAgo(59))],
-          info: { title: ROWS.find(r => r.id === sid)?.title ?? 'Bot Chat', running: false },
+          info: { title: ROWS.find(r => r.id === sid)?.title ?? Object.values(WORKSTREAMS).flat().find(w => w?.sessionId === sid)?.title ?? 'Bot Chat', running: false },
           running: false,
           revision: 1,
           execution_generation: 1
@@ -306,6 +325,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     setupSave: async () => undefined,
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
     readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),
+    workstreams: async botId => WORKSTREAMS[botId] ?? [],
     desktopModelPrefs: async () => ({ favorites: ['anthropic::claude-opus-5.5', 'openai-codex::gpt-6.1-sol'], presets: {} }),
     onEvent: () => () => undefined,
     onRequest: () => () => undefined,

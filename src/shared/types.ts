@@ -56,6 +56,21 @@ export interface SetupScan {
   install?: boolean
 }
 
+/** One of a bot's workstreams (Conduit plugin): a task it runs in its own, usually hidden, session. */
+export interface Workstream {
+  ref: string
+  /** starting | running | needs_you | waiting | ready | done | failed | stopped | interrupted */
+  status: string
+  sessionId: string
+  title: string
+  steps: { step: string; state: string }[]
+  lastResult: string
+  error: string
+  createdAt: number
+  updatedAt: number
+  closedAt: number
+}
+
 export interface HermesBridge {
   config(): Promise<AppConfig>
   request<T = any>(botId: string, method: string, params?: Record<string, unknown>): Promise<T>
@@ -77,6 +92,8 @@ export interface HermesBridge {
   }>
   /** Read a gateway-visible file back as a data URL. */
   readDataUrl(botId: string, filePath: string): Promise<string>
+  /** The bot's workstreams from the Conduit plugin's registry ([] when it has none). */
+  workstreams(botId: string): Promise<Workstream[]>
   onEvent(cb: (e: GatewayEventEnvelope) => void): () => void
   onRequest(cb: (r: ServerRequestEnvelope) => void): () => void
   onStatus(cb: (s: BotStatus) => void): () => void

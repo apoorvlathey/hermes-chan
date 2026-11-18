@@ -5,10 +5,11 @@ import path from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, shell } from 'electron'
 
 import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
-import { BotConnection } from './bots'
+import { BotConnection, friendlyError } from './bots'
 import { CONFIG_PATH, loadConfig, saveConfig } from './config'
 import { scanLocal, scanRemote, sshHosts } from './setup'
 import { closeTransports } from './transport'
+import { listWorkstreams } from './workstreams'
 
 /** `HERMESCHAN_DEMO=1` (pnpm demo): fake backend in the renderer, no gateway connections, and a
  *  separate userData folder so demo unread/pin state never mixes with the real app's. */
@@ -111,6 +112,15 @@ ipcMain.handle('hermes:read-data-url', async (_e, botId: string, filePath: strin
     return await conn.readDataUrl(filePath)
   } catch (err) {
     throw new Error(JSON.stringify({ message: (err as Error).message }))
+  }
+})
+ipcMain.handle('hermes:workstreams', async (_e, botId: string) => {
+  const conn = bots.get(botId)
+  if (!conn) throw new Error(`unknown bot ${botId}`)
+  try {
+    return await listWorkstreams(conn.bot.transport)
+  } catch (err) {
+    throw new Error(JSON.stringify({ message: friendlyError(err) }))
   }
 })
 /** Favourite models and per-model presets from Hermes Desktop's own preferences, so the picker

@@ -2,7 +2,7 @@
  *  `useStore(selector)`. Threads are keyed `${botId}:${rootSessionId}`. */
 import { useRef, useSyncExternalStore } from 'react'
 
-import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../../shared/types'
+import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, loadSessionModel, type ModelPick, noteFence } from './models'
 import { cronReport, humanJobName, userDisplay } from './transcript'
@@ -127,6 +127,10 @@ interface State {
   setupOpen: boolean
   search: string
   windowFocused: boolean
+  /** Each bot's workstreams (Conduit plugin), when loaded. */
+  workstreams: Record<string, Workstream[]>
+  /** The workstreams panel on the right is open. */
+  showWorkstreams: boolean
 }
 
 // ─── store core ─────────────────────────────────────────────────────────────────────────────────
@@ -144,7 +148,7 @@ const readJson = <T>(k: string, fallback: T): T => {
   }
 }
 
-const prefs = readJson<{ showRoutine?: boolean; lastBot?: string }>(PREFS_KEY, {})
+const prefs = readJson<{ showRoutine?: boolean; lastBot?: string; showWorkstreams?: boolean }>(PREFS_KEY, {})
 
 let state: State = {
   config: null,
@@ -160,7 +164,9 @@ let state: State = {
   pinOrder: readJson<string[]>(PIN_ORDER_KEY, []),
   setupOpen: false,
   search: '',
-  windowFocused: document.hasFocus()
+  windowFocused: document.hasFocus(),
+  workstreams: {},
+  showWorkstreams: prefs.showWorkstreams ?? true
 }
 
 const listeners = new Set<() => void>()
@@ -517,7 +523,7 @@ export function findSession(id: string): SessionRow | undefined {
 
 /** Open a session referenced from a message (`conduit://session/<id>?profile=…`, `@session:<id>`). Works for
  *  sessions hidden from the list too (worker / routine runs): resume takes any id the gateway knows. */
-export function openSessionRef(id: string, profile?: string, fromBotId?: string) {
+export function openSessionRef(id: string, profile?: string, fromBotId?: string, title = '') {
   const bot = state.bots[fromBotId ?? '']
   if (bot?.canonical && (bot.canonical.id === id || bot.canonical.resumeId === id)) return openBot(bot.id)
   const known = findSession(id)
@@ -529,7 +535,7 @@ export function openSessionRef(id: string, profile?: string, fromBotId?: string)
     botId,
     id,
     resumeId: id,
-    title: '',
+    title,
     source: '',
     preview: '',
     lastReply: '',
@@ -957,4 +963,25 @@ export async function boot() {
       setTimeout(unsub, 60_000)
     }
   }
+}
+
+// ─── workstreams ───────────────────────────────────────────────────────────────────────────────
+
+const ACTIVE_WORK = ['starting', 'running', 'needs_you', 'waiting', 'ready']
+export const isActiveWork = (w: Workstream) => ACTIVE_WORK.includes(w.status)
+
+/** Refresh a bot's workstreams. A bot without the Conduit plugin just gets an empty list; a failed
+ *  read keeps whatever was shown before. */
+export async function loadWorkstreams(botId: string) {
+  try {
+    const list = await hermes.workstreams(botId)
+    set(s => ({ workstreams: { ...s.workstreams, [botId]: list } }))
+  } catch {
+    /* offline or unreadable: keep the last list */
+  }
+}
+
+export function toggleWorkstreams(open = !state.showWorkstreams) {
+  savePrefs({ showWorkstreams: open })
+  set({ showWorkstreams: open })
 }

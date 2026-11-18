@@ -28,7 +28,8 @@ const live: HermesBridge = {
   ...w,
   request: (botId, method, params) => w.request(botId, method, params).catch(e => Promise.reject(revive(e))),
   uploadImage: (botId, dataUrl, filename) => w.uploadImage(botId, dataUrl, filename).catch(e => Promise.reject(revive(e))),
-  readDataUrl: (botId, filePath) => w.readDataUrl(botId, filePath).catch(e => Promise.reject(revive(e)))
+  readDataUrl: (botId, filePath) => w.readDataUrl(botId, filePath).catch(e => Promise.reject(revive(e))),
+  workstreams: botId => w.workstreams(botId).catch(e => Promise.reject(revive(e)))
 }
 
 /** `pnpm demo` swaps in a fake backend with made-up data (see demo.ts). */
