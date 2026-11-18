@@ -367,7 +367,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="titlebar-drag" />
       <div className="brand">
-        <span className="brand-mark">☤</span>
+        <img className="brand-mark" src="./logo.svg" alt="" draggable={false} />
         <span className="brand-name">HermesChan</span>
       </div>
 
