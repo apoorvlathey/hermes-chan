@@ -35,6 +35,14 @@ function stripMemoryContext(text: string): string {
 const IMAGE_MARKER_RE = /^\[Image attached(?: at)?: ([^\n\]]+)\]\s*$/
 const IMAGE_REF_RE = /@image:(?:"([^"\n]+)"|'([^'\n]+)'|`([^`\n]+)`|(\S+))/g
 
+/** What the user typed, when Hermes recorded it apart from the turn's content. A plugin can append its
+ *  own instructions to the stored message (the Conduit plugin adds a "Bot workstreams." brief when an
+ *  image is attached), but `display_metadata.typed_ask` keeps the user's words and image lines. */
+export function typedAsk(m: { display_metadata?: unknown }): string | null {
+  const v = parseMetadata(m.display_metadata)?.typed_ask
+  return typeof v === 'string' && v.trim() ? v : null
+}
+
 /** User text plus the gateway paths of the images sent with it. Images persist as
  *  `[Image attached at: <path>]` + `[screenshot]` lines (ingress) or `@image:` refs (older rows). */
 export function userDisplay(raw: string): { text: string; images: string[] } | null {
@@ -73,7 +81,7 @@ export function userDisplayText(raw: string): string | null {
   return [missing.join('\n'), visible].filter(Boolean).join('\n\n') || visible
 }
 
-function parseMetadata(meta: unknown): Record<string, any> | null {
+export function parseMetadata(meta: unknown): Record<string, any> | null {
   let v = meta
   if (typeof v === 'string') {
     try {

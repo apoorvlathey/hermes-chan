@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, loadSessionModel, type ModelPick, noteFence } from './models'
-import { cronReport, humanJobName, userDisplay } from './transcript'
+import { cronReport, humanJobName, typedAsk, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -416,7 +416,7 @@ function mapMessages(messages: any[]): Item[] {
       } else if (m.display_kind && m.display_kind !== 'user') {
         out.push({ kind: 'note', id: nid(), text: raw, ts })
       } else {
-        const shown = userDisplay(raw)
+        const shown = userDisplay(typedAsk(m) ?? raw)
         if (shown && (shown.text || shown.images.length)) {
           out.push({ kind: 'user', id: nid(), text: shown.text, ts, ...(shown.images.length ? { imagePaths: shown.images } : {}) })
         }
