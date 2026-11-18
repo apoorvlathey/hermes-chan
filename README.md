@@ -39,6 +39,9 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
   providers you actually set up, with your Hermes Desktop favourites first.
 - **Readable code.** Syntax highlighting for fenced code, with the language and a Copy button on every block.
 - **Links between chats.** Session links a bot writes (`hermes://session/…`, `@session:…`) open right in the app.
+- **Workstreams panel.** If your bot uses the Conduit plugin's workstreams (W1, W2…), a panel on the right of
+  its Bot Chat shows what it's working on in the background: status, step progress and the current step. Click one
+  to open its session, even while Hermes keeps it out of the chat list.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
 
 <table>
@@ -49,6 +52,12 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
   <tr>
     <td align="center">Regular chats keep a clean document layout</td>
     <td align="center">Per-chat model, effort and fast mode</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/workstreams.png" alt="A Bot Chat with the workstreams panel on the right: three active workstreams with step progress, and recent ones marked done or failed" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">Follow a bot's background workstreams from the panel on the right</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/screenshots/new-chat-attachments.png" alt="Starting a new chat with a pasted chart image and a PDF attached" /></td>
