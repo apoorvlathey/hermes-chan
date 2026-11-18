@@ -1137,7 +1137,9 @@ export async function boot() {
 // ─── workstreams ───────────────────────────────────────────────────────────────────────────────
 
 const ACTIVE_WORK = ['starting', 'running', 'needs_you', 'waiting', 'ready']
-export const isActiveWork = (w: Workstream) => ACTIVE_WORK.includes(w.status)
+/** Conduit's own rule (work_store `is_active`): an active status and not closed. Closing a workstream
+ *  leaves its status as it was (often "ready"), so `closedAt` decides whether it still needs you. */
+export const isActiveWork = (w: Workstream) => ACTIVE_WORK.includes(w.status) && !w.closedAt
 
 /** Refresh a bot's workstreams. A bot without the Conduit plugin just gets an empty list; a failed
  *  read keeps whatever was shown before. */

@@ -1,7 +1,9 @@
 /** A bot's workstreams (W1, W2…), read from the Conduit plugin's registry:
  *  `<profile home>/conduit/workstreams.db`. Read-only, and a bot without the plugin just has none.
  *  The plugin keeps a running workstream's session hidden from session.list, so this is the only
- *  place the app can see them while they work. */
+ *  place the app can see them while they work.
+ *  Conduit keeps two things apart: `status` is how the work went (a closed workstream can stay
+ *  "ready"), and `closed_at` > 0 means the user resolved it. Reopening sets it back to 0. */
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
@@ -14,7 +16,8 @@ const QUERY = `SELECT ref, status, session_id, title, goal, progress,
   substr(coalesce(last_result, ''), 1, 600) AS last_result, substr(coalesce(error, ''), 1, 300) AS error,
   created_at, updated_at, closed_at
 FROM work WHERE kind = 'workstream'
-ORDER BY status IN ('starting','running','needs_you','waiting','ready') DESC, updated_at DESC LIMIT 40`
+ORDER BY (status IN ('starting','running','needs_you','waiting','ready') AND coalesce(closed_at, 0) = 0) DESC,
+  max(coalesce(closed_at, 0), updated_at) DESC LIMIT 40`
 
 const PY = `import json,sqlite3,sys
 c=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True);c.row_factory=sqlite3.Row

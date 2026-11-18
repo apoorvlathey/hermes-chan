@@ -20,6 +20,15 @@ const STATUS: Record<string, { label: string; tone: 'work' | 'you' | 'wait' | 'd
   interrupted: { label: 'Interrupted', tone: 'bad' }
 }
 
+/** A workstream you closed while it was still "ready" (or otherwise open) reads as resolved; finished
+ *  ones keep their outcome (Done, Failed…). */
+const statusOf = (w: Workstream) =>
+  w.closedAt && !isActiveWork({ ...w, closedAt: 0 })
+    ? (STATUS[w.status] ?? { label: w.status, tone: 'done' as const })
+    : w.closedAt
+      ? { label: 'Resolved', tone: 'done' as const }
+      : (STATUS[w.status] ?? { label: w.status, tone: 'done' as const })
+
 function ago(ts: number): string {
   if (!ts) return ''
   const s = Math.max(0, Date.now() / 1000 - ts)
@@ -167,7 +176,7 @@ function summary(active: Workstream[]): string {
 }
 
 function Row({ w, botId, current }: { w: Workstream; botId: string; current: string | null }) {
-  const st = STATUS[w.status] ?? { label: w.status, tone: 'done' as const }
+  const st = statusOf(w)
   const total = w.steps.length
   const doneSteps = w.steps.filter(s => s.state === 'done').length
   const now = w.steps.find(s => s.state === 'doing') ?? (isActiveWork(w) ? w.steps.find(s => s.state === 'todo') : undefined)
