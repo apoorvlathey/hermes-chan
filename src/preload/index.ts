@@ -44,6 +44,8 @@ const bridge: HermesBridge = {
   onEvent: listen('hermes:event'),
   onRequest: listen('hermes:request'),
   onStatus: listen('hermes:status'),
+  notify: n => ipcRenderer.send('hermes:notify', n),
+  onOpenChat: listen('hermes:open-chat'),
   openExternal: url => ipcRenderer.send('hermes:open-external', url)
 }
 

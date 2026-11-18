@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { app, BrowserWindow, ipcMain, nativeTheme, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, Notification, powerMonitor, shell } from 'electron'
 
-import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope } from '../shared/types'
+import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ReplyNotice, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection, friendlyError } from './bots'
 import { CONFIG_PATH, loadConfig, saveConfig } from './config'
 import { scanLocal, scanRemote, sshHosts } from './setup'
@@ -153,6 +153,27 @@ const reconnect = (botId?: string) =>
   ).then(() => undefined)
 
 ipcMain.handle('hermes:reconnect', (_e, botId?: string) => reconnect(botId))
+/** Notifications must stay referenced until they're dismissed, or a click after GC does nothing. */
+const notices = new Set<Notification>()
+
+ipcMain.on('hermes:notify', (_e, n: ReplyNotice) => {
+  if (!win || win.isFocused()) return
+  app.dock?.bounce('informational')
+  if (!Notification.isSupported()) return
+  const note = new Notification({ title: n.title, subtitle: n.subtitle, body: n.body })
+  notices.add(note)
+  const drop = () => notices.delete(note)
+  note.on('click', () => {
+    drop()
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    send('hermes:open-chat', { botId: n.botId, sessionId: n.sessionId })
+  })
+  note.on('close', drop)
+  note.show()
+})
 ipcMain.on('hermes:open-external', (_e, url: string) => {
   if (/^https?:\/\//.test(url)) void shell.openExternal(url)
 })

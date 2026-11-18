@@ -721,6 +721,48 @@ function onServerRequest(r: ServerRequestEnvelope) {
   }
 }
 
+// ─── reply notifications ────────────────────────────────────────────────────────────────────────
+
+/** Markdown to one plain line for a notification body. */
+function plainText(md: string): string {
+  return md
+    .replace(/```[\s\S]*?(```|$)/g, ' [code] ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>~|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** A reply finished while HermesChan is in the background: bounce the dock and post a notification
+ *  (the main process skips both if the window has focus). Only for chats you'd see: a Bot Chat, a
+ *  chat in the sidebar, or one open here; hidden routine and workstream runs stay quiet. */
+function notifyReply(botId: string, sid: string, payload: Record<string, any>, key?: string) {
+  if (state.windowFocused) return
+  if (payload.status === 'interrupted' || payload.status === 'cancelled') return
+  const bot = state.bots[botId]
+  if (!bot) return
+  const canonical = !!bot.canonical && (bot.canonical.id === sid || bot.canonical.resumeId === sid)
+  const row = findSession(sid)
+  const hidden = state.config?.hiddenSources ?? []
+  if (!key && !canonical && (!row || isRoutine(row, hidden))) return
+  const err = payload.error || (payload.status === 'error' ? payload.failure_reason : null)
+  const text = err ? `Couldn't finish: ${err}` : plainText(typeof payload.text === 'string' ? payload.text : '')
+  const thread = key ? state.threads[key] : undefined
+  const isBotChat = canonical || !!thread?.isBotChat
+  const body = text.length > 180 ? `${text.slice(0, 177)}…` : text || 'New message'
+  hermes.notify({ botId, sessionId: sid, title: bot.name, subtitle: isBotChat ? undefined : thread?.title || row?.title || undefined, body })
+}
+
+function openFromNotice({ botId, sessionId }: { botId: string; sessionId: string }) {
+  const bot = state.bots[botId]
+  if (bot?.canonical && (bot.canonical.id === sessionId || bot.canonical.resumeId === sessionId)) return openBot(botId)
+  const key = state.live[`${botId}:${sessionId}`]
+  if (key && state.threads[key]?.isBotChat) return openBot(botId)
+  if (key && state.threads[key]) return set({ view: { kind: 'session', key } })
+  openSessionRef(sessionId, undefined, botId)
+}
+
 // ─── streaming events ───────────────────────────────────────────────────────────────────────────
 
 function lastStreaming(t: Thread) {
@@ -768,7 +810,10 @@ function onEvent({ botId, event }: GatewayEventEnvelope) {
   noteFence(botId, sid, payload?.revision, (event as { execution_generation?: number }).execution_generation)
   const key = state.live[`${botId}:${sid}`]
   if (!key) {
-    if (type === 'message.complete') scheduleRefresh(botId)
+    if (type === 'message.complete') {
+      notifyReply(botId, sid, payload)
+      scheduleRefresh(botId)
+    }
     return
   }
 
@@ -841,6 +886,7 @@ function onEvent({ botId, event }: GatewayEventEnvelope) {
         if (err) items = [...items, { kind: 'note', id: nid(), tone: 'error', text: String(err) }]
         return { items, running: false, thinking: false, status: undefined }
       })
+      notifyReply(botId, sid, payload, key)
       const done = state.threads[key]
       if (done && !done.localTurn && done.liveId) void attach(key, botId, done.liveId)
       patchThread(key, () => ({ localTurn: false }))
@@ -937,6 +983,7 @@ export async function boot() {
   set({ config, statuses, bots })
 
   hermes.onEvent(onEvent)
+  hermes.onOpenChat(openFromNotice)
   hermes.onRequest(onServerRequest)
   hermes.onStatus(st => {
     const was = state.statuses[st.botId]?.state

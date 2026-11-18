@@ -71,6 +71,14 @@ export interface Workstream {
   closedAt: number
 }
 
+export interface ReplyNotice {
+  botId: string
+  sessionId: string
+  title: string
+  subtitle?: string
+  body: string
+}
+
 export interface HermesBridge {
   config(): Promise<AppConfig>
   request<T = any>(botId: string, method: string, params?: Record<string, unknown>): Promise<T>
@@ -97,6 +105,11 @@ export interface HermesBridge {
   onEvent(cb: (e: GatewayEventEnvelope) => void): () => void
   onRequest(cb: (r: ServerRequestEnvelope) => void): () => void
   onStatus(cb: (s: BotStatus) => void): () => void
+  /** A finished reply while the window is in the background: bounce the dock icon and post a
+   *  notification (skipped by the main process if the window has focus). */
+  notify(n: ReplyNotice): void
+  /** The user clicked a reply notification: open that chat. */
+  onOpenChat(cb: (target: { botId: string; sessionId: string }) => void): () => void
   statuses(): Promise<BotStatus[]>
   openExternal(url: string): void
   configPath(): Promise<string>
