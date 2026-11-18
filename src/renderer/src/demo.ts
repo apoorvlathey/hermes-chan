@@ -109,7 +109,37 @@ const cronReport = (job: string, text: string, ts: number) => ({
 
 const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
+// A workstream as the Conduit plugin writes it: the coordinator's brief opens it, follow-ups arrive
+// as steer rows. The plugin's standing instructions to the worker are part of the brief's text.
+const brief = (from: string, ref: string, title: string, said: string, task: string, ts: number) =>
+  user(
+    `You're working on a task for ${from}, who coordinates the user's work in their Bot Chat. This chat is that workstream (${ref}: ${title}); the user can open it and talk to you here. Do the task with your own tools.\n\nIf a step needs the user on ${from}'s screen, call work_progress with screen set.\n\nThe user's message that ${from} is answering now, as they wrote it (this is the user speaking; ${from}'s own words are ${from}'s):\n«${said}»\n\nTask:\n${task}`,
+    ts
+  )
+const followUp = (from: string, text: string, said: string, ts: number) => ({
+  role: 'user',
+  display_kind: 'steer',
+  text: `[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position]\n${from}, who coordinates this work, passes on:\n${text}\n\nThe user's message that ${from} is answering now, as they wrote it (this is the user speaking; ${from}'s own words are ${from}'s):\n«${said}»\n[/OUT-OF-BAND USER MESSAGE]`,
+  timestamp: ts
+})
+
 const TRANSCRIPTS: Record<string, unknown[]> = {
+  'work-w7': [
+    brief(
+      'Atlas',
+      'W7',
+      'Book the Lisbon flights and a quiet stay near Alfama',
+      "fares dipped, let's book lisbon for 14–21 dec and find somewhere quiet near alfama",
+      'Book the cheapest direct return to Lisbon for 14–21 December (fares were €198 this morning) and shortlist three quiet guesthouses within a 10-minute walk of Alfama, under €140 a night with good reviews for noise. Hold the best flight and stay pair if the airline and sites allow a free hold; do not pay for anything. Report the options with prices, cancellation terms and links, and say which pair you would pick and why. Keep the passport details out of any form until the user confirms.',
+      minsAgo(40)
+    ),
+    tool('🔎', 'Web Search', 'Lisbon direct flights 14–21 Dec', minsAgo(39)),
+    tool('🌐', 'Browser', 'TAP fare calendar', minsAgo(38)),
+    bot('Flights first: **TAP direct, €198 return**, 14 Dec 09:40 → 21 Dec 18:15. Free 24-hour hold is available, so I placed one. Now looking at guesthouses.', minsAgo(30)),
+    followUp('Atlas', 'The user prefers a place with a small kitchen, even if it costs a little more. Keep the €140 cap unless one is clearly better.', 'oh and a kitchenette would be nice', minsAgo(12)),
+    tool('🔎', 'Web Search', 'Alfama guesthouse kitchenette quiet', minsAgo(11)),
+    bot('Noted, kitchenette it is. Two of the three shortlisted places have one; swapping the third for **Casa do Largo** (€132, quiet courtyard room).', minsAgo(4))
+  ],
   [BOT_CHAT('atlas')]: [
     user('Can you keep an eye on flights to Lisbon for mid December?', at(1, 18, 40)),
     tool('🔎', 'Web Search', 'Lisbon return flights 14–21 Dec', at(1, 18, 40)),

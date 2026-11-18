@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
-import { cronReport, humanJobName, typedAsk, userDisplay } from './transcript'
+import { cronReport, handoff, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -71,6 +71,8 @@ export type Item =
   | { kind: 'assistant'; id: string; text: string; ts?: number; streaming?: boolean; report?: string }
   | { kind: 'tool'; id: string; tool: ToolInfo; ts?: number }
   | { kind: 'note'; id: string; text: string; tone?: 'error' | 'info'; ts?: number }
+  /** A coordinator's task or follow-up in a workstream (Conduit plugin), not the user's own words. */
+  | { kind: 'handoff'; id: string; from: string; type: 'brief' | 'follow-up'; text: string; quote?: string; ts?: number }
 
 export interface Thread {
   key: string
@@ -411,8 +413,15 @@ function mapMessages(messages: any[]): Item[] {
       const raw = typeof m.display_content === 'string' ? m.display_content : textOf(m)
       if (m.display_kind === 'hidden' || !raw) continue
       const report = cronReport(m, raw)
+      const passed = report ? null : handoff(raw)
       if (report) {
         out.push({ kind: 'assistant', id: nid(), text: report.text, ts, report: humanJobName(report.jobName) })
+      } else if (passed) {
+        out.push({ kind: 'handoff', id: nid(), ts, ...passed })
+      } else if (m.display_kind === 'steer') {
+        // A message you sent while the bot was working, delivered into its running turn.
+        const shown = userDisplay(unwrapSteer(raw))
+        if (shown?.text || shown?.images.length) out.push({ kind: 'user', id: nid(), text: shown.text, ts, ...(shown.images.length ? { imagePaths: shown.images } : {}) })
       } else if (m.display_kind && m.display_kind !== 'user') {
         out.push({ kind: 'note', id: nid(), text: raw, ts })
       } else {

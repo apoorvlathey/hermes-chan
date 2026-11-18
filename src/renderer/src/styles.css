@@ -3191,3 +3191,98 @@ button.ghost {
 .back-btn:active {
   transform: translateX(-1px) scale(0.96);
 }
+
+/* ─── coordinator handoffs in a workstream ────────────────────────────────── */
+
+.handoff {
+  align-self: stretch;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+  animation: rise 0.35s var(--ease);
+}
+
+.handoff-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.handoff-from {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.handoff-kind {
+  color: var(--text-3);
+}
+
+.handoff-kind::before {
+  content: '·';
+  margin-right: 8px;
+}
+
+.handoff-time {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.handoff-quote,
+.handoff-main {
+  padding: 12px 14px;
+}
+
+.handoff-quote + .handoff-main {
+  border-top: 1px solid var(--line);
+}
+
+.handoff-label {
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.handoff-quote-text {
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+
+.handoff-body .md {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.handoff-body.folded {
+  max-height: 6.4em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent);
+  mask-image: linear-gradient(to bottom, #000 50%, transparent);
+}
+
+.handoff-more {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 12.5px var(--font);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.handoff-more:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

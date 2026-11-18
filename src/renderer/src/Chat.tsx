@@ -214,6 +214,42 @@ function ChatSkeleton({ bubbles }: { bubbles: boolean }) {
   )
 }
 
+/** What the coordinating bot handed this workstream: the opening task, or a later follow-up. Long
+ *  briefs start folded. The user's own words it was answering are quoted on top. */
+function HandoffCard({ item, bot }: { item: Extract<Item, { kind: 'handoff' }>; bot: Bot }) {
+  const long = item.text.length > (item.type === 'brief' ? 420 : 900)
+  const [open, setOpen] = useState(!long)
+  return (
+    <section className="handoff">
+      <header className="handoff-head">
+        <Avatar bot={bot} size={18} />
+        <span className="handoff-from">{item.from}</span>
+        <span className="handoff-kind">{item.type === 'brief' ? 'Task' : 'Follow-up'}</span>
+        {item.ts ? <span className="handoff-time">{clock(item.ts)}</span> : null}
+      </header>
+      {item.quote && (
+        <div className="handoff-quote">
+          <div className="handoff-label">Your message</div>
+          <div className="handoff-quote-text">{item.quote}</div>
+        </div>
+      )}
+      {item.text && (
+        <div className="handoff-main">
+          {item.quote && <div className="handoff-label">{item.type === 'brief' ? `What ${item.from} asked` : `${item.from} added`}</div>}
+          <div className={`handoff-body ${open ? '' : 'folded'}`}>
+            <Markdown text={item.text} botId={bot.id} />
+          </div>
+          {long && (
+            <button className="handoff-more" onClick={() => setOpen(o => !o)}>
+              {open ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles?: boolean }) {
   if (item.kind === 'user') {
     return (
@@ -252,6 +288,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
   if (item.kind === 'note') {
     return <div className={`note ${item.tone ?? ''}`}>{item.text}</div>
   }
+  if (item.kind === 'handoff') return <HandoffCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
     return (
       <div

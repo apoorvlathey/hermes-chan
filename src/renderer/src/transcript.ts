@@ -131,3 +131,50 @@ export function splitRefs(text: string): ({ kind: 'text'; text: string } | { kin
   if (last < text.length) out.push({ kind: 'text', text: text.slice(last) })
   return out
 }
+
+// ─── coordinator handoffs (Conduit plugin workstreams) ─────────────────────────────────────────
+
+export interface Handoff {
+  /** The coordinating bot ("Operator"). */
+  from: string
+  /** 'brief': the task that opened the workstream; 'follow-up': a later "passes on" message. */
+  type: 'brief' | 'follow-up'
+  /** What the coordinator asked, as written. */
+  text: string
+  /** The user's own words the coordinator was answering, when it quoted them. */
+  quote?: string
+}
+
+const OOB_RE = /^\s*\[OUT-OF-BAND USER MESSAGE[^\]\n]*\]\n?([\s\S]*?)\n?\[\/OUT-OF-BAND USER MESSAGE\]\s*$/
+const BRIEF_RE = /^You're working on a task for (.+?), who coordinates the user's work/
+const FOLLOW_RE = /^(.+?), who coordinates this work, passes on:\n/
+const QUOTE_RE = /\n*The user's message that .+? is answering now[^\n]*\n«([\s\S]*?)»\s*/
+
+/** A steer row's text without its out-of-band wrapper. */
+export function unwrapSteer(raw: string): string {
+  return OOB_RE.exec(raw)?.[1] ?? raw
+}
+
+/** A message the Conduit plugin wrote into a workstream on the coordinator's behalf, or null.
+ *  The plugin's own instructions to the worker (how to report, which tools) are left out. */
+export function handoff(raw: string): Handoff | null {
+  const text = unwrapSteer(raw).trim()
+  const cleanQuote = (q?: string) => {
+    if (!q) return undefined
+    const shown = userDisplay(q)
+    return shown?.text.trim() || undefined
+  }
+  const brief = BRIEF_RE.exec(text)
+  if (brief) {
+    const at = text.indexOf('\n\nTask:\n')
+    const task = at >= 0 ? text.slice(at + 8).trim() : ''
+    return { from: brief[1]!, type: 'brief', text: task, quote: cleanQuote(QUOTE_RE.exec(at >= 0 ? text.slice(0, at) : text)?.[1]) }
+  }
+  const follow = FOLLOW_RE.exec(text)
+  if (follow) {
+    const body = text.slice(follow[0].length)
+    const q = QUOTE_RE.exec(body)
+    return { from: follow[1]!, type: 'follow-up', text: (q ? body.slice(0, q.index) : body).trim(), quote: cleanQuote(q?.[1]) }
+  }
+  return null
+}
