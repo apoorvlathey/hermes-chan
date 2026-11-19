@@ -42,6 +42,10 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
 - **Workstreams panel.** If your bot uses the Conduit plugin's workstreams (W1, W2…), a panel on the right of
   its Bot Chat shows what it's working on in the background: status, step progress and the current step. Click one
   to open its session, even while Hermes keeps it out of the chat list.
+- **Native Kanban tab.** Browse Hermes's actual task boards on a configured local or SSH connection,
+  separate from Conduit workstreams. Select the connection/profile and board, filter cards, hide done or
+  empty columns, refresh, and open task descriptions, dependency IDs, blocked reasons, results and comments.
+  This view is read-only: it never starts workers, claims tasks, or changes their status.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
 
 <table>
@@ -178,6 +182,32 @@ Setup saves your bots to `~/.hermes-chan/config.json`. You can also edit it by h
 - Names, colours and avatars come from each profile's Bot Mode settings when it has them; the values here are
   fallbacks.
 - `HERMESCHAN_HOME=/some/folder` points the app at a different config folder (handy for a second setup).
+
+### Kanban
+
+Click **Kanban** above the conversation. It starts on the active chat's configured connection;
+use **Connection / profile** to choose another host. Hermes boards are shared across profiles on a host:
+the profile selector does **not** filter tasks by assignee. The **Board** selector starts on that host's
+current board. Empty columns are hidden initially; **Hide done** and the text filter are optional.
+Archived tasks are included when present. Click a card for details; press Escape to close and restore focus.
+
+Reads use the existing local/SSH transport, the installed Hermes board resolver, and a fixed Python reader.
+SQLite opens only a private temporary snapshot of the board and WAL, never the live database (even a
+SQLite read-only connection can create WAL sidecars). Snapshot copies are checked for source changes,
+queried, and cleaned up. No new endpoint or server installation is needed. The host
+needs `python3` plus a discoverable compatible Hermes Python installation (the configured `hermes` launcher
+is checked first). This view does not initialize/migrate the native database or recompute task statuses.
+It loads the complete board; an unstable snapshot, unsupported schema, timeout or
+64 MiB response safety ceiling produces an explicit error, never a partial board. Snapshotting adds
+local I/O and temporary-space use. Refresh is manual.
+
+For source verification, run `pnpm test`, `pnpm typecheck`, and `pnpm build`. Mac acceptance should also check:
+
+1. Run `pnpm dev` from the feature branch (no installation/replacement is necessary).
+2. Open Kanban on a configured SSH bot; confirm its host/profile, current board, titles and counts.
+3. Switch boards/connections; confirm the old cards disappear rather than showing under the new host.
+4. Open a blocked card, check dependencies/details, close with Escape; test filters and Refresh.
+5. Switch back to Chat and open another bot/session; existing chat and workstreams should still work.
 
 ## How it works
 

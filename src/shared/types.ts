@@ -71,6 +71,29 @@ export interface Workstream {
   closedAt: number
 }
 
+/** Native Hermes Kanban persisted state (not Conduit workstreams). Status is open-ended:
+ *  Hermes currently includes scheduled and triage, and supports custom workflows. */
+export interface KanbanTask {
+  id: string
+  title: string
+  status: string
+  assignee: string
+  parents: string[]
+  children: string[]
+  blockReason: string
+}
+
+export interface KanbanDetail extends KanbanTask {
+  body: string
+  result: string
+  comments: { body: string; author: string }[]
+}
+
+export interface KanbanBoards {
+  boards: { slug: string; name: string }[]
+  current: string
+}
+
 export interface ReplyNotice {
   botId: string
   sessionId: string
@@ -104,6 +127,10 @@ export interface HermesBridge {
   readDataUrl(botId: string, filePath: string): Promise<string>
   /** The bot's workstreams from the Conduit plugin's registry ([] when it has none). */
   workstreams(botId: string): Promise<Workstream[]>
+  /** Read-only native Hermes Kanban. Transport and installed paths are main-process owned. */
+  kanbanBoards(botId: string): Promise<KanbanBoards>
+  kanbanTasks(botId: string, board: string): Promise<{ tasks: KanbanTask[] }>
+  kanbanDetail(botId: string, board: string, taskId: string): Promise<KanbanDetail>
   onEvent(cb: (e: GatewayEventEnvelope) => void): () => void
   onRequest(cb: (r: ServerRequestEnvelope) => void): () => void
   onStatus(cb: (s: BotStatus) => void): () => void

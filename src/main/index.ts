@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, Notification, powerMonitor, s
 import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ReplyNotice, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection, friendlyError } from './bots'
 import { CONFIG_PATH, loadConfig, saveConfig } from './config'
+import { registerKanbanIpc } from './kanban-ipc'
 import { scanLocal, scanRemote, sshHosts } from './setup'
 import { closeTransports } from './transport'
 import { listWorkstreams } from './workstreams'
@@ -71,6 +72,12 @@ function startBots() {
     conn.start()
   }
 }
+
+registerKanbanIpc(
+  ipcMain,
+  botId => config.bots.find(bot => bot.id === botId)?.transport,
+  event => !!win && !win.isDestroyed() && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
+)
 
 ipcMain.handle('hermes:config', () => config)
 ipcMain.handle('setup:scan-local', () => scanLocal())

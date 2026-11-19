@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Kanban } from './Kanban'
+import './kanban.css'
 
 import { Chat } from './Chat'
 import { Setup } from './Setup'
@@ -10,6 +12,11 @@ export function App() {
   const view = useStore(s => s.view)
   const noBots = useStore(s => !!s.config && s.config.bots.length === 0)
   const setupOpen = useStore(s => s.setupOpen)
+  const config = useStore(s => s.config)
+  const activeBotId = useStore(s => s.view?.kind === 'session' ? s.threads[s.view.key]?.botId : s.view?.botId)
+  const [tab, setTab] = useState<'chat' | 'kanban'>('chat')
+  // Clicking a bot/chat in the existing sidebar returns to that conversation.
+  useEffect(() => setTab('chat'), [view])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +46,11 @@ export function App() {
     <div className="app">
       <Sidebar />
       <main className="main">
-        {view ? (
+        <nav className="workspace-tabs" aria-label="Workspace">
+          <button aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}>Chat</button>
+          <button aria-pressed={tab === 'kanban'} onClick={() => setTab('kanban')}>Kanban</button>
+        </nav>
+        {tab === 'kanban' && config ? <Kanban bots={config.bots} initialBotId={activeBotId} /> : view ? (
           <div className="main-split">
             <Chat />
             <WorkstreamsPanel />

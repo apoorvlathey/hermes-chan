@@ -12,6 +12,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test src/main/kanban*.test.ts src/renderer/src/kanban*.test.ts src/renderer/src/KanbanView.test.tsx",
     "probe": "tsx scripts/probe.ts",
     "sync-shared": "bash scripts/sync-shared.sh",
     "package": "electron-vite build && electron-builder --mac --dir",
