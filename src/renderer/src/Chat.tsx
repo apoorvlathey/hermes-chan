@@ -9,6 +9,7 @@ import {
   cancelReply,
   findSession,
   focusedKey,
+  onPrefill,
   openSessionRef,
   reconnectBot,
   openSetup,
@@ -28,6 +29,7 @@ import { CodeBlock } from './CodeBlock'
 import { hermes } from './bridge'
 import { Highlighted } from './highlight'
 import { ModelPicker } from './ModelPicker'
+import { useSlashMenu } from './SlashMenu'
 import { clock } from './time'
 import { describeTool, splitPath, summarize, type ToolKind, type ToolView } from './toolView'
 import { splitRefs, type ReplyQuote } from './transcript'
@@ -421,6 +423,46 @@ function CronOutputCard({ item, bot }: { item: Extract<Item, { kind: 'cron' }>; 
   )
 }
 
+/** ANSI colour codes the CLI's command output carries. */
+const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
+
+/** Command output the gateway formatted as markdown (`**Model:** …`) rather than terminal text. */
+const looksMarkdown = (t: string) => /\*\*[^*\n]+\*\*|^#{1,6} |^\s*[-*] \S|`[^`\n]+`/m.test(t) && !/[┌─│╭]/.test(t)
+
+function CommandCard({ item, bot }: { item: Extract<Item, { kind: 'command' }>; bot: Bot }) {
+  const out = (item.output ?? '').replace(ANSI, '').replace(/\s+$/, '')
+  const long = out.length > 600 || out.split('\n').length > 12
+  const [open, setOpen] = useState(!long)
+  return (
+    <section className={`handoff command-out ${item.failed ? 'failed' : ''}`}>
+      <header className="handoff-head">
+        <svg className="cron-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+          <path d="M3 4.5 6.5 8 3 11.5M8.5 11.5H13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="command-line">{item.command}</span>
+        {item.pending ? <span className="handoff-kind">Running…</span> : item.failed ? <span className="handoff-kind">{item.unavailable ? 'Not available' : 'Failed'}</span> : null}
+        {item.ts ? <span className="handoff-time">{clock(item.ts)}</span> : null}
+      </header>
+      {out && (
+        <div className="handoff-main">
+          {looksMarkdown(out) ? (
+            <div className={`handoff-body ${open ? '' : 'folded'}`}>
+              <Markdown text={out.replace(/\n/g, '  \n')} botId={bot.id} />
+            </div>
+          ) : (
+            <pre className={`command-text handoff-body ${open ? '' : 'folded'}`}>{out}</pre>
+          )}
+          {long && (
+            <button className="handoff-more" onClick={() => setOpen(o => !o)}>
+              {open ? 'Show less' : 'Show all output'}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 const REPLY_ICON = (
   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
     <path d="M6.5 3.5 2.5 7.5l4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -525,6 +567,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
   }
   if (item.kind === 'handoff') return <HandoffCard item={item} bot={bot} />
   if (item.kind === 'cron') return <CronOutputCard item={item} bot={bot} />
+  if (item.kind === 'command') return <CommandCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
     return (
       <div
@@ -705,10 +748,24 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
   const picker = useRef<HTMLInputElement>(null)
   const view = useStore(s => s.view)
   const reply = useStore(s => (s.replyDraft && s.replyDraft.key === focusedKey(s) ? s.replyDraft : null))
+  const liveId = useStore(s => {
+    const k = focusedKey(s)
+    return k ? s.threads[k]?.liveId : undefined
+  })
 
   useEffect(() => {
     if (reply) ref.current?.focus()
   }, [reply])
+
+  // `/undo` hands the backed-up message back for editing.
+  useEffect(() => {
+    onPrefill((k, t) => {
+      if (k !== focusedKey()) return
+      setText(t)
+      ref.current?.focus()
+    })
+    return () => onPrefill(null)
+  }, [])
 
   useEffect(() => {
     ref.current?.focus()
@@ -747,17 +804,21 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
 
   const canSend = (!!text.trim() || drafts.length > 0) && !disabled
 
-  const submit = () => {
-    if (!canSend) return
-    void send(text, drafts)
+  const submit = (override?: string) => {
+    const body = override ?? text
+    if ((!body.trim() && !drafts.length) || disabled) return
+    void send(body, drafts)
     setText('')
     setDrafts([])
     setError(null)
     setHop(h => h + 1)
   }
 
+  const slash = useSlashMenu({ botId: bot.id, sessionId: liveId, text, setText, run: t => submit(t) })
+
   return (
     <div className="composer-wrap">
+      {slash.menu}
       {error && (
         <div className="composer-error" onClick={() => setError(null)}>
           {error}
@@ -827,6 +888,7 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
             void addFiles(files)
           }}
           onKeyDown={e => {
+            if (slash.onKeyDown(e)) return
             if (e.key === 'Escape' && reply) {
               e.preventDefault()
               cancelReply()
@@ -843,14 +905,14 @@ function Composer({ bot, running, disabled }: { bot: Bot; running: boolean; disa
             ■
           </button>
         ) : (
-          <button key={hop} className={`send ${canSend ? 'ready' : ''} ${hop ? 'hop' : ''}`} onClick={submit} title="Send  ↵">
+          <button key={hop} className={`send ${canSend ? 'ready' : ''} ${hop ? 'hop' : ''}`} onClick={() => submit()} title="Send  ↵">
             ↑
           </button>
         )}
         </div>
       </div>
       <div className="composer-hint">
-        {running ? 'Messages you send now steer the current turn.' : '↵ send · ⇧↵ new line · paste or drop images and files'}
+        {running ? 'Messages you send now steer the current turn.' : '↵ send · ⇧↵ new line · / for commands · paste or drop images and files'}
       </div>
     </div>
   )

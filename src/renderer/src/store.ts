@@ -5,6 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
+import { CLIENT_COMMANDS, loadCatalog, parseSlash } from './slash'
 import { cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
@@ -79,6 +80,8 @@ export type Item =
   | { kind: 'assistant'; id: string; text: string; ts?: number; streaming?: boolean; report?: string }
   | { kind: 'tool'; id: string; tool: ToolInfo; ts?: number }
   | { kind: 'note'; id: string; text: string; tone?: 'error' | 'info'; ts?: number }
+  /** A slash command run from this window and what it printed (not part of the stored transcript). */
+  | { kind: 'command'; id: string; command: string; output?: string; pending?: boolean; failed?: boolean; unavailable?: boolean; ts?: number }
   /** A coordinator's task or follow-up in a workstream (Conduit plugin), not the user's own words. */
   | { kind: 'cron'; id: string; job: string; text: string; failed?: boolean; ts?: number }
   | { kind: 'handoff'; id: string; from: string; type: 'brief' | 'follow-up'; text: string; quote?: string; ts?: number }
@@ -624,6 +627,11 @@ export async function send(text: string, drafts: Draft[] = []) {
   if (!v || !key || (!text.trim() && !drafts.length)) return
   const botId = v.kind === 'session' ? state.threads[key]?.botId : v.botId
   if (!botId) return
+  if (!state.threads[key]) return
+
+  // `/status`, `/skill-name …`: run it rather than sending it to the model as text.
+  const slash = !drafts.length && !state.replyDraft ? parseSlash(text) : null
+  if (slash && (await runSlash(key, botId, text.trim(), slash))) return
   let t = state.threads[key]
   if (!t) return
 
@@ -644,31 +652,7 @@ export async function send(text: string, drafts: Draft[] = []) {
   patchThread(key, th => ({ items: [...th.items, sent], running: true, thinking: true, status: undefined, localTurn: true }))
 
   try {
-    let liveId = t.liveId
-    let finalKey = key
-    if (!liveId) {
-      // New chat (or a bot that has never had a Bot Chat): mint the session first.
-      const pick = createParamsFor(t.model)
-      const created = await hermes.request<any>(botId, 'session.create', pick.params)
-      liveId = created.session_id as string
-      await applyFastAfterCreate(botId, liveId, pick.fast)
-      // Bot Mode finds a bot's forever-chat by this exact title.
-      if (t.isBotChat) await hermes.request(botId, 'session.title', { session_id: liveId, title: 'Bot Chat' }).catch(() => undefined)
-      const rootId = (created.stored_session_id || created.info?.stored_session_id || liveId) as string
-      finalKey = threadKey(botId, rootId)
-      t = state.threads[key]
-      set(s => {
-        const threads = { ...s.threads }
-        delete threads[key]
-        threads[finalKey] = { ...t, key: finalKey, rootId, liveId, isBotChat: t.isBotChat }
-        return {
-          threads,
-          live: { ...s.live, [`${botId}:${liveId}`]: finalKey },
-          view: t.isBotChat ? s.view : { kind: 'session', key: finalKey },
-          seen: { ...s.seen, [finalKey]: Date.now() / 1000 }
-        }
-      })
-    }
+    const { liveId } = await ensureLive(key, botId)
     // Images: stored on the gateway host over REST, then admitted with the turn as `attachments`
     // (canonical gateways own the composer queue). Other files: staged into the session workspace by
     // `file.attach`, which hands back an `@file:` ref the message carries.
@@ -688,15 +672,7 @@ export async function send(text: string, drafts: Draft[] = []) {
     ])
     const typed = [refs.join('\n'), text].filter(s => s.trim()).join('\n\n')
     const body = reply ? withReply(reply, typed) : typed
-
-    // submission_id is the gateway's idempotency key for this turn (required on canonical gateways).
-    await hermes.request(botId, 'prompt.submit', {
-      session_id: liveId,
-      text: body,
-      submission_id: crypto.randomUUID(),
-      ...(uploaded.length ? { attachments: uploaded.map(u => ({ path: u.path, mime: u.mime })) } : {})
-    })
-    scheduleRefresh(botId, 1500)
+    await submitText(botId, liveId, body, uploaded)
   } catch (err) {
     const k = focusedKey() ?? key
     patchThread(k, th => ({
@@ -705,6 +681,157 @@ export async function send(text: string, drafts: Draft[] = []) {
       items: [...th.items, { kind: 'note', id: nid(), tone: 'error', text: `Couldn't send: ${(err as Error).message}` }]
     }))
   }
+}
+
+/** The chat's gateway session, created first for a new chat (or a bot that has never had a Bot Chat).
+ *  Creating it re-keys the thread, so callers get the key it lives under now. */
+async function ensureLive(key: string, botId: string): Promise<{ liveId: string; key: string }> {
+  let t = state.threads[key]
+  if (t.liveId) return { liveId: t.liveId, key }
+  const pick = createParamsFor(t.model)
+  const created = await hermes.request<any>(botId, 'session.create', pick.params)
+  const liveId = created.session_id as string
+  await applyFastAfterCreate(botId, liveId, pick.fast)
+  // Bot Mode finds a bot's forever-chat by this exact title.
+  if (t.isBotChat) await hermes.request(botId, 'session.title', { session_id: liveId, title: 'Bot Chat' }).catch(() => undefined)
+  const rootId = (created.stored_session_id || created.info?.stored_session_id || liveId) as string
+  const finalKey = threadKey(botId, rootId)
+  t = state.threads[key]
+  set(s => {
+    const threads = { ...s.threads }
+    delete threads[key]
+    threads[finalKey] = { ...t, key: finalKey, rootId, liveId, isBotChat: t.isBotChat }
+    return {
+      threads,
+      live: { ...s.live, [`${botId}:${liveId}`]: finalKey },
+      view: t.isBotChat ? s.view : { kind: 'session', key: finalKey },
+      seen: { ...s.seen, [finalKey]: Date.now() / 1000 },
+      ...(s.replyDraft?.key === key ? { replyDraft: { ...s.replyDraft, key: finalKey } } : {})
+    }
+  })
+  return { liveId, key: finalKey }
+}
+
+async function submitText(botId: string, liveId: string, body: string, uploaded: { path: string; mime: string }[] = []) {
+  // submission_id is the gateway's idempotency key for this turn (required on canonical gateways).
+  await hermes.request(botId, 'prompt.submit', {
+    session_id: liveId,
+    text: body,
+    submission_id: crypto.randomUUID(),
+    ...(uploaded.length ? { attachments: uploaded.map(u => ({ path: u.path, mime: u.mime })) } : {})
+  })
+  scheduleRefresh(botId, 1500)
+}
+
+// ─── slash commands ─────────────────────────────────────────────────────────────────────────────
+
+type Dispatch =
+  | { type: 'exec' | 'plugin'; output?: string }
+  | { type: 'alias'; target: string }
+  | { type: 'send' | 'skill' | 'prefill'; message?: string; notice?: string }
+
+/** Hand-off for `prefill` results (`/undo`): the composer picks the text up for editing. */
+let prefillSink: ((key: string, text: string) => void) | null = null
+export const onPrefill = (fn: typeof prefillSink) => {
+  prefillSink = fn
+}
+
+/** Run a typed `/command` the way the Hermes desktop app does: `slash.exec` on the gateway, falling
+ *  back to `command.dispatch` for skills, bundles and commands that turn into a message. Returns false
+ *  when the bot doesn't know the command, so the text goes to the model as an ordinary message. */
+async function runSlash(key: string, botId: string, typed: string, cmd: { name: string; arg: string }, depth = 0): Promise<boolean> {
+  let catalog
+  try {
+    catalog = await loadCatalog(botId)
+  } catch {
+    return false
+  }
+  const entry = catalog.byName.get(cmd.name)
+  if (!entry) return false
+  const canonical = entry.aliasOf ?? entry.name
+
+  if (CLIENT_COMMANDS.has(canonical)) {
+    newChat(botId)
+    return true
+  }
+  // The gateway's /stop ends background processes; the running reply is stopped from here.
+  if (canonical === '/stop' && state.threads[key]?.running) await stop()
+
+  const id = nid()
+  const ts = Date.now() / 1000
+  const show = (patch: Partial<Extract<Item, { kind: 'command' }>>) =>
+    patchThread(liveKey, th => ({ items: th.items.map(i => (i.id === id && i.kind === 'command' ? { ...i, ...patch } : i)) }))
+  let liveKey = key
+  patchThread(key, th => ({ items: [...th.items, { kind: 'command', id, command: typed, ts, ...(entry.unavailable ? { output: `${entry.name} ${entry.unavailable}.`, failed: true, unavailable: true } : { pending: true }) }] }))
+  if (entry.unavailable) return true
+
+  try {
+    const live = await ensureLive(key, botId)
+    liveKey = live.key
+    const name = canonical.slice(1)
+    let dispatch: Dispatch | null = null
+    let execError: unknown = null
+    try {
+      const r = await hermes.request<any>(botId, 'slash.exec', { session_id: live.liveId, command: typed.replace(/^\/+/, '') })
+      if (r?.type) dispatch = r as Dispatch
+      else {
+        const body = r?.output || `${entry.name}: no output`
+        show({ pending: false, output: r?.warning ? `warning: ${r.warning}\n${body}` : body })
+        return true
+      }
+    } catch (err) {
+      // Skills, bundles and message-making commands are refused by slash.exec and run through
+      // command.dispatch instead; anything else that failed here is the real error.
+      execError = err
+    }
+    if (!dispatch) {
+      try {
+        dispatch = await hermes.request<Dispatch>(botId, 'command.dispatch', { session_id: live.liveId, name, arg: cmd.arg })
+      } catch (err) {
+        const msg = (err as Error).message
+        throw execError && /not a quick\/plugin\/(?:bundle\/)?skill command/i.test(msg) ? execError : err
+      }
+    }
+
+    if (dispatch.type === 'exec' || dispatch.type === 'plugin') {
+      show({ pending: false, output: dispatch.output || '(no output)' })
+      return true
+    }
+    if (dispatch.type === 'alias') {
+      patchThread(liveKey, th => ({ items: th.items.filter(i => i.id !== id) }))
+      if (depth < 3) await runSlash(liveKey, botId, `/${dispatch.target}${cmd.arg ? ` ${cmd.arg}` : ''}`, { name: `/${dispatch.target}`, arg: cmd.arg }, depth + 1)
+      return true
+    }
+    const turn = dispatch as Extract<Dispatch, { type: 'send' | 'skill' | 'prefill' }>
+    const notice = turn.notice?.trim()
+    const message = turn.message?.trim() ?? ''
+    if (turn.type === 'prefill') {
+      show({ pending: false, output: notice || 'Moved back into the composer for editing.' })
+      if (message) prefillSink?.(liveKey, message)
+      return true
+    }
+    if (!message) {
+      show({ pending: false, failed: true, output: `${entry.name}: ${turn.type === 'skill' ? 'the skill sent nothing' : 'empty message'}` })
+      return true
+    }
+    // The command became a turn (a skill, `/plan …`, `/queue …`): the bubble shows what was typed, the
+    // model gets the expanded message.
+    patchThread(liveKey, th => ({
+      items: [
+        ...th.items.filter(i => i.id !== id || !!notice).map(i => (i.id === id && i.kind === 'command' ? { ...i, pending: false, output: notice } : i)),
+        { kind: 'user', id: nid(), text: typed, ts }
+      ],
+      running: true,
+      thinking: true,
+      status: undefined,
+      localTurn: true
+    }))
+    await submitText(botId, live.liveId, message)
+  } catch (err) {
+    show({ pending: false, failed: true, output: (err as Error).message })
+    patchThread(liveKey, () => ({ running: false, thinking: false }))
+  }
+  return true
 }
 
 /** Stop the running turn. The gateway only takes a Stop that names the turn's execution generation

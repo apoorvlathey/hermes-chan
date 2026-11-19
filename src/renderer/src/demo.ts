@@ -340,6 +340,37 @@ export function demoBridge(real: HermesBridge): HermesBridge {
   seedLocalState()
   const statuses: BotStatus[] = BOTS.map(b => ({ botId: b.id, state: 'ready' }))
 
+  const DEMO_COMMANDS = {
+    categories: [
+      { name: 'Session', pairs: [
+        ['/new', 'Start a new session'], ['/retry', 'Retry the last message (resend to agent)'], ['/undo', 'Back up N user turns and re-prompt (default 1)'],
+        ['/title', 'Set a title for the current session'], ['/compress', 'Compress conversation context'], ['/stop', 'Kill all running background processes'],
+        ['/queue', 'Queue a prompt for after the current turn'], ['/goal', 'Set a standing goal the agent works toward'], ['/plan', 'Plan before acting'],
+        ['/status', 'Show session, model, token, and context info'], ['/context', 'Show detailed context window view']
+      ] },
+      { name: 'Configuration', pairs: [['/reasoning', 'Manage reasoning effort and display'], ['/personality', 'Set a predefined personality'], ['/clear', 'Clear screen and start a new session']] },
+      { name: 'Info', pairs: [['/usage', 'Show token usage and account limits'], ['/insights', 'Usage insights'], ['/help', 'Show available commands']] },
+      { name: 'Tools & Skills', pairs: [['/tools', 'Manage tools'], ['/skills', 'Search, install, inspect, or manage skills'], ['/memory', 'View or edit memory'], ['/cron', 'Manage scheduled jobs']] },
+      { name: 'Skills', pairs: [['/flight-search', 'Search fares across airlines and flexible dates.'], ['/recipe-scaler', 'Scale a recipe and its shopping list.'], ['/weekly-review', 'Run the weekly review checklist.']] }
+    ],
+    commands: {
+      '/new': { argument_mode: 'text', desktop: null }, '/retry': { argument_mode: null, desktop: null }, '/undo': { argument_mode: 'text', desktop: null },
+      '/title': { argument_mode: 'text', desktop: null }, '/compress': { argument_mode: 'text', desktop: null }, '/stop': { argument_mode: null, desktop: null },
+      '/queue': { argument_mode: 'mixed', desktop: null }, '/goal': { argument_mode: 'mixed', desktop: null }, '/plan': { argument_mode: 'text', desktop: null },
+      '/status': { argument_mode: null, desktop: null }, '/context': { argument_mode: 'options', desktop: null }, '/reasoning': { argument_mode: 'options', desktop: null },
+      '/personality': { argument_mode: 'options', desktop: null }, '/clear': { argument_mode: null, desktop: 'terminal' }, '/usage': { argument_mode: 'text', desktop: null },
+      '/insights': { argument_mode: 'text', desktop: 'advanced' }, '/help': { argument_mode: 'text', desktop: null }, '/tools': { argument_mode: 'options', desktop: null },
+      '/skills': { argument_mode: 'options', desktop: null }, '/memory': { argument_mode: 'options', desktop: null }, '/cron': { argument_mode: 'options', desktop: 'terminal' }
+    },
+    skills: { '/flight-search': { usage: 3, origin: 'user' }, '/recipe-scaler': { usage: 1, origin: 'user' }, '/weekly-review': { usage: 5, origin: 'user' } },
+    canon: { '/reset': '/new' }
+  }
+
+  const demoCommandOutput = (name: string, model: string, cmd: string) =>
+    cmd.startsWith('status')
+      ? `📊 **${name} status**\n\n**Title:** Bot Chat\n**Model:** \`${model}\`\n**Context:** 18,240 / 400,000 (5%)\n**Agent Running:** No`
+      : `/${cmd}: done`
+
   const request = async (botId: string, method: string, params: Record<string, any> = {}): Promise<any> => {
     const id = botId as BotId
     const b = BOTS.find(x => x.id === id)!
@@ -397,6 +428,16 @@ export function demoBridge(real: HermesBridge): HermesBridge {
       }
       case 'model.options':
         return { providers: PROVIDERS, model: b.model, provider: providerOf(b.model) }
+      case 'commands.catalog':
+        return DEMO_COMMANDS
+      case 'complete.slash': {
+        const m = /^\/reasoning\s+(\S*)$/.exec(String(params.text ?? ''))
+        if (!m) return { items: [] }
+        const items = ['low', 'medium', 'high', 'xhigh'].filter(x => x.startsWith(m[1])).map(text => ({ text, display: text, meta: '' }))
+        return { items, replace_from: String(params.text).length - m[1].length }
+      }
+      case 'slash.exec':
+        return { output: demoCommandOutput(b.name, b.model, String(params.command ?? '')) }
       default:
         return {}
     }
