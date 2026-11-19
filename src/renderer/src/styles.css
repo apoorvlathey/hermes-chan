@@ -3926,3 +3926,20 @@ button.ghost {
 .command-out.failed .handoff-kind {
   color: var(--danger);
 }
+
+/* ─── subagent / background process finished ───────────────────────────────────────────────────── */
+
+.background-subject {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.background-done.failed .cron-icon,
+.background-done.failed .handoff-from {
+  color: var(--danger);
+}

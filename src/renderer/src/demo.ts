@@ -124,6 +124,15 @@ const cronOutput = (job: string, text: string, ts: number) => ({
   timestamp: ts
 })
 
+// Hermes's async-delegation report: the whole task source for the model, a short title for people.
+const subagentDone = (goal: string, result: string, ts: number) => ({
+  role: 'user',
+  display_kind: 'async_delegation_complete',
+  display_metadata: { display_text: `Subagent Task Completed: ${goal}`, task_count: 1 },
+  text: `[ASYNC DELEGATION COMPLETE — deleg_3f9a21c0]\nA background subagent you dispatched earlier has finished. You may have moved on since dispatching it; the full task source is below so you can act on the result or re-dispatch if things have changed.\n\nDispatched: 2026-11-19 09:15:02 (48s ago)\nOriginal goal: ${goal}\nRole: leaf   Model: claude-sonnet-5.5\nStatus: completed   API calls: 6   Duration: 47.9s\n--- RESULT ---\n${result}`,
+  timestamp: ts
+})
+
 const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 
 // A workstream as the Conduit plugin writes it: the coordinator's brief opens it, follow-ups arrive
@@ -180,7 +189,13 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
       at(0, 9, 13)
     ),
     user('send it 🙌', at(0, 9, 14)),
-    bot('Sent ✉️ I also added Friday 10:00 as a tentative hold on your calendar.', at(0, 9, 14))
+    bot('Sent ✉️ I also added Friday 10:00 as a tentative hold on your calendar. Checking guesthouses near Alfama in the background.', at(0, 9, 14)),
+    subagentDone(
+      'Shortlist three quiet guesthouses near Alfama for 14–21 Dec under €120/night, with recent reviews',
+      '**Three options, all with free cancellation:**\n\n| Guesthouse | Per night | Rating | Note |\n|---|---|---|---|\n| Casa do Largo | €104 | 9.1 | Courtyard rooms are the quiet ones |\n| Alfama Patio | €96 | 8.8 | 4 min to the tram, no lift |\n| Memória Hostel (private) | €82 | 9.3 | Shared kitchen |\n\nCasa do Largo is the best match for quiet; recent reviews mention thick walls and no street noise.',
+      at(0, 9, 15)
+    ),
+    bot('Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Want me to hold it?', at(0, 9, 16))
   ],
   [BOT_CHAT('pixel')]: [
     user('morning! anything for me?', at(0, 10, 2)),

@@ -214,3 +214,109 @@ export function splitReply(text: string): { reply?: ReplyQuote; text: string } {
   if (!m) return { text }
   return { reply: { own: !!m[1], text: m[2]! }, text: text.slice(m[0].length) }
 }
+
+/** Hermes's notice that background work finished: a subagent from `delegate_task` (async), or one or more
+ *  background processes. It reaches the bot as a `user` row (display_kind `async_delegation_complete` /
+ *  `process_complete`) carrying the whole report for the model, with a short title for people in
+ *  `display_metadata.display_text`. */
+export interface BackgroundDone {
+  variant: 'subagent' | 'process'
+  /** "Subagent task completed", "2 background processes finished". */
+  label: string
+  /** The subagent's task, when there is one. */
+  subject?: string
+  /** What came back: the subagent's result (markdown), or the processes' exits. */
+  body: string
+  /** The body is terminal output, not markdown. */
+  plain?: boolean
+  failed: boolean
+}
+
+const DELEG_HEAD_RE = /^\[ASYNC DELEGATION (?:BATCH )?(?:COMPLETE|TASK FAILED)\b[^\]\n]*\]/
+const PROCESS_HEAD_RE = /^\[IMPORTANT: (?:\d+ )?[Bb]ackground process/
+
+export function backgroundDone(m: { role: string; display_kind?: string | null; display_metadata?: unknown }, raw: string): BackgroundDone | null {
+  const kind = m.display_kind
+  const isDeleg = kind === 'async_delegation_complete' || (!kind && DELEG_HEAD_RE.test(raw))
+  const isProc = kind === 'process_complete' || (!kind && PROCESS_HEAD_RE.test(raw) && raw.includes('exit code'))
+  if (m.role !== 'user' || (!isDeleg && !isProc)) return null
+  const title = String(parseMetadata(m.display_metadata)?.display_text ?? '').trim()
+  const cut = title.indexOf(': ')
+  const head = cut > 0 ? title.slice(0, cut) : title
+  let subject = cut > 0 ? title.slice(cut + 2).trim() : ''
+
+  if (isProc) {
+    const codes = [...raw.matchAll(/\(exit code (-?\d+)\)/g)].map(x => Number(x[1]))
+    const body = raw
+      .replace(/^\[IMPORTANT: \d+ background process results arrived[^\]]*\]\s*/, '')
+      .replace(/\[IMPORTANT: Background process (\S+) ([^\n]*?)\.?\n/g, (_m, id: string, what: string) => `● ${id} ${what}\n`)
+      .replace(/\n\]\s*(?=\n|$)/g, '\n')
+      .replace(/^\[INTERNAL NOTIFICATION[^\]]*\]\s*$/gm, '')
+      .trim()
+    const n = Math.max(1, codes.length)
+    return {
+      variant: 'process',
+      label: sentence(head) || (n === 1 ? 'Background process finished' : `${n} background processes finished`),
+      body,
+      plain: true,
+      failed: codes.some(c => c !== 0)
+    }
+  }
+
+  // A subagent. Single runs carry the result after `--- RESULT ---`; batches give each task a
+  // `--- ✓ TASK i/n: <goal> (status=…) ---` header followed by its result.
+  const failedRun = /^\[ASYNC DELEGATION TASK FAILED/.test(raw) || /^Status: (?!completed|success)/m.test(raw)
+  let body = ''
+  const single = raw.split(/^--- RESULT ---\s*$/m)
+  const error = raw.split(/^--- ERROR ---\s*$/m)
+  if (single.length > 1) body = single[1]
+  else if (error.length > 1) body = error[1]
+  else {
+    const tasks = [...raw.matchAll(/^--- ([✓✗⚠]) TASK (\d+)\/(\d+)(?::\s*([\s\S]*?))?\s+\(status=([^)]*)\) ---\s*$/gm)]
+    if (tasks.length === 1) body = raw.slice(tasks[0].index! + tasks[0][0].length)
+    else if (tasks.length > 1)
+      body = tasks
+        .map((t, i) => {
+          const end = i + 1 < tasks.length ? tasks[i + 1].index! : raw.length
+          const goal = (t[4] ?? '').replace(/\s+/g, ' ').trim()
+          return `**${t[1]} Task ${t[2]}/${t[3]}**${goal ? ` · ${clip(goal, 140)}` : ''}\n\n${tidyResult(raw.slice(t.index! + t[0].length, end))}`
+        })
+        .join('\n\n')
+  }
+  if (!subject) subject = /^Original goal: (.*)$/m.exec(raw)?.[1]?.trim() ?? /^Task: (.*)$/m.exec(raw)?.[1]?.trim() ?? ''
+  const label = sentence(head) || (failedRun ? 'Subagent task failed' : 'Subagent task completed')
+  return {
+    variant: 'subagent',
+    label,
+    subject: subject || undefined,
+    // Nothing recognisable: the report minus its model-facing heading and intro.
+    body: tidyResult(body || raw.replace(DELEG_HEAD_RE, '').replace(/^\s*[^\n]+\n/, '')),
+    failed: failedRun || /failed|interrupted|timed out|cancelled|stalled|issues|incomplete|unknown/i.test(head)
+  }
+}
+
+/** "Subagent Task Completed" → "Subagent task completed". */
+const sentence = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '')
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+
+/** A result as markdown: JSON gets a code fence, and the model-facing trailers go. */
+function tidyResult(text: string): string {
+  const t = text
+    .replace(/^Full live transcript \(complete tool\/assistant trace\):.*$/gm, '')
+    .replace(/^Task index \d+ transcript.*$/gm, '')
+    .replace(/^\[INTERNAL NOTIFICATION[^\]]*\]\s*$/gm, '')
+    .trim()
+  if (!/^[[{]/.test(t)) return t
+  // A JSON answer, maybe with lines after it: fence the JSON, keep the rest as written.
+  const close = t[0] === '{' ? '}' : ']'
+  for (let end = t.lastIndexOf(close); end > 0; end = t.lastIndexOf(close, end - 1)) {
+    try {
+      const json = JSON.stringify(JSON.parse(t.slice(0, end + 1)), null, 2)
+      const rest = t.slice(end + 1).trim()
+      return '```json\n' + json + '\n```' + (rest ? `\n\n${rest}` : '')
+    } catch {
+      /* try an earlier closing bracket */
+    }
+  }
+  return t
+}

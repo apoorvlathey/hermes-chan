@@ -6,7 +6,7 @@ import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope,
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
 import { CLIENT_COMMANDS, loadCatalog, parseSlash } from './slash'
-import { cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
+import { backgroundDone, type BackgroundDone, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -84,6 +84,8 @@ export type Item =
   | { kind: 'command'; id: string; command: string; output?: string; pending?: boolean; failed?: boolean; unavailable?: boolean; ts?: number }
   /** A coordinator's task or follow-up in a workstream (Conduit plugin), not the user's own words. */
   | { kind: 'cron'; id: string; job: string; text: string; failed?: boolean; ts?: number }
+  /** A subagent or background process finished (Hermes hands its report to the bot). */
+  | ({ kind: 'background'; id: string; ts?: number } & BackgroundDone)
   | { kind: 'handoff'; id: string; from: string; type: 'brief' | 'follow-up'; text: string; quote?: string; ts?: number }
 
 export interface Thread {
@@ -456,6 +458,11 @@ function mapMessages(messages: any[]): Item[] {
     if (m.role === 'user') {
       const raw = typeof m.display_content === 'string' ? m.display_content : textOf(m)
       if (m.display_kind === 'hidden' || !raw) continue
+      const done = backgroundDone(m, raw)
+      if (done) {
+        out.push({ kind: 'background', id: nid(), ts, ...done })
+        continue
+      }
       const report = cronReport(m, raw)
       const output = report ? null : cronOutput(m, raw)
       const passed = report || output ? null : handoff(raw)

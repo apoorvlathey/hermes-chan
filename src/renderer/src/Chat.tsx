@@ -423,6 +423,57 @@ function CronOutputCard({ item, bot }: { item: Extract<Item, { kind: 'cron' }>; 
   )
 }
 
+/** A subagent or background process finished: what it was asked, and what came back. */
+function BackgroundCard({ item, bot }: { item: Extract<Item, { kind: 'background' }>; bot: Bot }) {
+  const long = item.body.length > 420 || item.body.split('\n').length > 8
+  const [open, setOpen] = useState(!long)
+  return (
+    <section className={`handoff background-done ${item.failed ? 'failed' : ''}`}>
+      <header className="handoff-head">
+        {item.variant === 'subagent' ? (
+          <svg className="cron-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+            <circle cx="4.5" cy="3.5" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="4.5" cy="12.5" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="11.5" cy="6" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M4.5 5.2v5.6M11.5 7.7c0 2.3-2 3.2-5.3 3.9" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg className="cron-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+            <path d="M3 4.5 6.5 8 3 11.5M8.5 11.5H13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        <span className="handoff-from">{item.label}</span>
+        {item.ts ? <span className="handoff-time">{clock(item.ts)}</span> : null}
+      </header>
+      {item.subject && (
+        <div className="handoff-quote">
+          <div className="handoff-label">Task</div>
+          <div className="background-subject" title={item.subject}>
+            {item.subject}
+          </div>
+        </div>
+      )}
+      {item.body && (
+        <div className="handoff-main">
+          {item.subject && <div className="handoff-label">Result</div>}
+          {item.plain ? (
+            <pre className={`command-text handoff-body ${open ? '' : 'folded'}`}>{item.body}</pre>
+          ) : (
+            <div className={`handoff-body ${open ? '' : 'folded'}`}>
+              <Markdown text={item.body} botId={bot.id} />
+            </div>
+          )}
+          {long && (
+            <button className="handoff-more" onClick={() => setOpen(o => !o)}>
+              {open ? 'Show less' : 'Show full result'}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** ANSI colour codes the CLI's command output carries. */
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
 
@@ -567,6 +618,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
   }
   if (item.kind === 'handoff') return <HandoffCard item={item} bot={bot} />
   if (item.kind === 'cron') return <CronOutputCard item={item} bot={bot} />
+  if (item.kind === 'background') return <BackgroundCard item={item} bot={bot} />
   if (item.kind === 'command') return <CommandCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
     return (
