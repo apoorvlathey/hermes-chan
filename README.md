@@ -51,6 +51,8 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
 - **Slash commands.** Type `/` for the bot's commands and skills with descriptions, then their options
   (`/reasoning ` → low, medium, high). Commands run through the gateway and show their output inline.
 - **Quote replies.** Reply to a specific message in Bot Chat; the quote travels with your message.
+- **Files bots send.** When a bot attaches files to a reply, images show inline (click for full size), text and
+  Markdown files open in a preview, audio and video play, and any file can be saved to Downloads.
 - **Background work, readable.** When a subagent or a background process finishes, its result shows as a card
   with the task and the outcome, instead of the raw notice Hermes hands the bot.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
