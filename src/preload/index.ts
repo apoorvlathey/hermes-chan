@@ -33,6 +33,7 @@ const bridge: HermesBridge = {
   request: (botId, method, params = {}) => unwrap(ipcRenderer.invoke('hermes:request', botId, method, params)),
   uploadImage: (botId, dataUrl, filename) => unwrap(ipcRenderer.invoke('hermes:upload-image', botId, dataUrl, filename)),
   readDataUrl: (botId, filePath) => unwrap(ipcRenderer.invoke('hermes:read-data-url', botId, filePath)),
+  saveFile: (botId, filePath) => unwrap(ipcRenderer.invoke('hermes:save-file', botId, filePath)),
   workstreams: botId => unwrap(ipcRenderer.invoke('hermes:workstreams', botId)),
   pinnedSessions: botId => unwrap(ipcRenderer.invoke('hermes:pinned-sessions', botId)),
   kanbanBoards: botId => unwrap(ipcRenderer.invoke('hermes:kanban-boards', botId)),

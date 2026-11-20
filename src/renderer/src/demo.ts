@@ -84,6 +84,30 @@ function demoProfile(id: string) {
   })
 }
 
+// ─── attachments a bot sends (MEDIA: tags) ───────────────────────────────────────────────────────
+
+const DEMO_NOTES = '# Lisbon guesthouses, 14–21 Dec\n\n| Guesthouse | Per night | Rating | Quiet? |\n|---|---|---|---|\n| Casa do Largo | €104 | 9.1 | Courtyard rooms |\n| Alfama Patio | €96 | 8.8 | Street side is loud |\n| Memória Hostel (private) | €82 | 9.3 | Yes |\n\nAll three have free cancellation until 7 Dec.\n'
+
+// A small bar chart of the three guesthouses, drawn as an SVG so the demo needs no image files.
+const DEMO_CHART = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 640 320" font-family="-apple-system, sans-serif">
+    <rect width="640" height="320" fill="#1d1a23"/>
+    <text x="32" y="44" fill="#efeaf4" font-size="18" font-weight="600">Price per night vs rating</text>
+    <text x="32" y="68" fill="#8a8396" font-size="13">Lisbon, 14–21 Dec · three quiet options near Alfama</text>
+    ${[
+      ['Casa do Largo', 104, '9.1', '#f2c14e'],
+      ['Alfama Patio', 96, '8.8', '#a993f0'],
+      ['Memória Hostel', 82, '9.3', '#5cc8a0']
+    ]
+      .map(([name, price, rating, color], i) => {
+        const y = 110 + i * 64
+        const w = (Number(price) / 120) * 420
+        return `<text x="32" y="${y + 22}" fill="#cfc8d8" font-size="14">${name}</text><rect x="170" y="${y + 6}" width="${w}" height="24" rx="5" fill="${color}"/><text x="${180 + w}" y="${y + 23}" fill="#efeaf4" font-size="13">€${price} · ${rating}</text>`
+      })
+      .join('')}
+  </svg>`
+)}`
+
 // ─── chats ─────────────────────────────────────────────────────────────────────────────────────
 
 interface Row {
@@ -227,7 +251,10 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
       '**Three options, all with free cancellation:**\n\n| Guesthouse | Per night | Rating | Note |\n|---|---|---|---|\n| Casa do Largo | €104 | 9.1 | Courtyard rooms are the quiet ones |\n| Alfama Patio | €96 | 8.8 | 4 min to the tram, no lift |\n| Memória Hostel (private) | €82 | 9.3 | Shared kitchen |\n\nCasa do Largo is the best match for quiet; recent reviews mention thick walls and no street noise.',
       at(0, 9, 15)
     ),
-    bot('Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Want me to hold it?', at(0, 9, 16)),
+    bot(
+      'Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Here are the three side by side, and the full notes.\n\nMEDIA:/home/demo/notes/lisbon/guesthouses.png\nMEDIA:/home/demo/notes/lisbon/shortlist.md\n\nWant me to hold it?',
+      at(0, 9, 16)
+    ),
     // Hermes's Kanban notifier: a batch of task changes, then a single notice handed to the bot.
     user(
       '✔ [default] @default Kanban t_7a20c3d2 done — Compare fares for the 14th\nCheapest sensible option: TP 1351 at 07:40, €212 return with a carry-on. Two others within €20.\n✖ [default] @default Kanban t_5e8a1b42 worker crashed (pid gone); dispatcher will retry\n⏸ [default] @default Kanban t_5e8a1b42 blocked: The accountant folder is shared view-only, so the receipts can’t be written there. Needs edit access or a different folder.\n✔ [default] @pixel Kanban t_0b5f3a17 done — Three logo directions for the newsletter\nWordmark, monogram and a small owl mark, each in light and dark.',
@@ -565,7 +592,16 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     setupSave: async () => undefined,
     reorderBots: async () => undefined,
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
-    readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),
+    readDataUrl: async (_b, filePath) => {
+      await new Promise(r => setTimeout(r, 300))
+      if (filePath.endsWith('.md')) return `data:text/markdown;base64,${btoa(unescape(encodeURIComponent(DEMO_NOTES)))}`
+      if (filePath.endsWith('guesthouses.png')) return DEMO_CHART
+      return avatar('hsl(220 20% 30%)', '🖼️')
+    },
+    saveFile: async (_b, filePath) => {
+      await new Promise(r => setTimeout(r, 400))
+      return `~/Downloads/${filePath.split('/').pop()}`
+    },
     workstreams: async botId => WORKSTREAMS[botId] ?? [],
     pinnedSessions: async () => [],
     kanbanBoards: async botId => demoKanbanBoards(botId),

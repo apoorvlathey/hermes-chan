@@ -29,6 +29,8 @@ import {
 } from './store'
 import { BotDayDivider, BotTime, localDay } from './botChat'
 import { CodeBlock } from './CodeBlock'
+import { MediaAttachments } from './Attachments'
+import { splitMedia } from './mediaTags'
 import { BoardIcon, StatusIcon } from './Kanban'
 import { hermes } from './bridge'
 import { Highlighted } from './highlight'
@@ -712,6 +714,8 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
   if (item.kind === 'kanban') return <KanbanUpdatesCard item={item} bot={bot} />
   if (item.kind === 'command') return <CommandCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
+    // Files the bot attached (`MEDIA:` tags) show under the text instead of as raw paths.
+    const { text, media } = splitMedia(item.text, !!item.streaming)
     return (
       <div
         className={`msg bot ${item.streaming ? 'streaming' : ''} ${item.report ? 'report' : ''}`}
@@ -727,8 +731,9 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
             {!bubbles && item.ts ? <span className="report-time">{clock(item.ts)}</span> : null}
           </div>
         )}
-        {bubbles && !item.streaming && <ReplyButton text={item.text} own />}
-        <Markdown text={item.text} botId={bot.id} />
+        {bubbles && !item.streaming && <ReplyButton text={text} own />}
+        {text && <Markdown text={text} botId={bot.id} />}
+        {media.length > 0 && <MediaAttachments botId={bot.id} paths={media} />}
         {bubbles && !item.streaming && <BotTime ts={item.ts} />}
       </div>
     )

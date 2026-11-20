@@ -165,6 +165,8 @@ export interface HermesBridge {
   }>
   /** Read a gateway-visible file back as a data URL. */
   readDataUrl(botId: string, filePath: string): Promise<string>
+  /** Save a file on the bot's machine into ~/Downloads (shown in Finder); returns where it went. */
+  saveFile(botId: string, filePath: string): Promise<string>
   /** The bot's workstreams from the Conduit plugin's registry ([] when it has none). */
   workstreams(botId: string): Promise<Workstream[]>
   /** Every pinned session (raw `/api/sessions` rows), including ones too old for `session.list`. */

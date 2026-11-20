@@ -29,6 +29,7 @@ const live: HermesBridge = {
   request: (botId, method, params) => w.request(botId, method, params).catch(e => Promise.reject(revive(e))),
   uploadImage: (botId, dataUrl, filename) => w.uploadImage(botId, dataUrl, filename).catch(e => Promise.reject(revive(e))),
   readDataUrl: (botId, filePath) => w.readDataUrl(botId, filePath).catch(e => Promise.reject(revive(e))),
+  saveFile: (botId, filePath) => w.saveFile(botId, filePath).catch(e => Promise.reject(revive(e))),
   workstreams: botId => w.workstreams(botId).catch(e => Promise.reject(revive(e))),
   pinnedSessions: botId => w.pinnedSessions(botId).catch(e => Promise.reject(revive(e))),
   kanbanBoards: botId => w.kanbanBoards(botId).catch(e => Promise.reject(revive(e))),

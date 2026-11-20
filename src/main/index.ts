@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -138,6 +138,29 @@ ipcMain.handle('hermes:read-data-url', async (_e, botId: string, filePath: strin
     return await conn.readDataUrl(filePath)
   } catch (err) {
     throw new Error(JSON.stringify({ message: (err as Error).message }))
+  }
+})
+/** Save a file a bot attached (a path on its machine) into ~/Downloads and show it in Finder. Never
+ *  overwrites: a name that's taken gets " (2)", " (3)"… */
+ipcMain.handle('hermes:save-file', async (_e, botId: string, filePath: string) => {
+  const conn = bots.get(botId)
+  if (!conn) throw new Error(`unknown bot ${botId}`)
+  if (typeof filePath !== 'string' || !/^(~\/|\/)/.test(filePath) || filePath.includes('\0')) throw new Error(JSON.stringify({ message: 'Not a file path' }))
+  try {
+    const dataUrl = await conn.readDataUrl(filePath)
+    const comma = dataUrl.indexOf(',')
+    const bytes = Buffer.from(dataUrl.slice(comma + 1), dataUrl.slice(0, comma).includes(';base64') ? 'base64' : 'utf8')
+    const dir = app.getPath('downloads')
+    const base = path.basename(filePath).replace(/[/\\:]/g, '_') || 'download'
+    const ext = path.extname(base)
+    const stem = base.slice(0, base.length - ext.length)
+    let target = path.join(dir, base)
+    for (let n = 2; existsSync(target); n++) target = path.join(dir, `${stem} (${n})${ext}`)
+    writeFileSync(target, bytes, { flag: 'wx' })
+    shell.showItemInFolder(target)
+    return target
+  } catch (err) {
+    throw new Error(JSON.stringify({ message: friendlyError(err) }))
   }
 })
 ipcMain.handle('hermes:workstreams', async (_e, botId: string) => {
