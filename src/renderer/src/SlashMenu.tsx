@@ -21,9 +21,13 @@ export function useSlashMenu(opts: {
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [args, setArgs] = useState<{ text: string; from: number; items: ArgItem[] } | null>(null)
 
+  const slashed = text.startsWith('/')
+  // Typing `/` afresh asks again: after a failed fetch (the bot was away) the menu recovers on the next
+  // `/` instead of staying empty. A loaded catalog is cached, so this costs nothing then.
+  const fresh = text === '/'
   useEffect(() => {
     setCatalog(catalogNow(botId))
-    if (!text.startsWith('/')) return
+    if (!slashed) return
     let live = true
     loadCatalog(botId)
       .then(c => live && setCatalog(c))
@@ -32,7 +36,7 @@ export function useSlashMenu(opts: {
       live = false
     }
     // Fetch on the first `/`, not on every keystroke.
-  }, [botId, text.startsWith('/')])
+  }, [botId, slashed, fresh])
 
   const cmdQuery = /^\/([\w-]*)$/.exec(text)?.[1]
   const argCmd = useMemo(() => {

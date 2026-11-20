@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from 'react'
 import type { AppConfig, BotStatus, GatewayEventEnvelope, KanbanBoardInfo, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
-import { CLIENT_COMMANDS, loadCatalog, parseSlash } from './slash'
+import { CLIENT_COMMANDS, forgetCatalog, loadCatalog, parseSlash } from './slash'
 import { backgroundDone, type BackgroundDone, kanbanUpdates, type KanbanUpdate, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
@@ -1276,6 +1276,7 @@ export async function boot() {
       // Back after a drop: a new socket has no session subscriptions, so re-open this bot's loaded
       // chats to get live replies (and anything that arrived while offline).
       if (was && was !== 'ready') {
+        forgetCatalog(st.botId)
         for (const t of Object.values(state.threads)) {
           if (t.botId === st.botId && t.liveId) void attach(t.key, t.botId, t.liveId)
         }

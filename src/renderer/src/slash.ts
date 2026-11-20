@@ -58,15 +58,30 @@ const UNAVAILABLE: Record<string, string> = {
 
 const cache = new Map<string, { at: number; p: Promise<Catalog> }>()
 const TTL = 5 * 60_000
+/** A request to a bot that just dropped can hang; give up rather than block the menu until the TTL. */
+const TIMEOUT = 10_000
 
-/** The bot's catalog, fetched once and refreshed every few minutes (skills come and go). */
+/** The bot's catalog, fetched once and refreshed every few minutes (skills come and go). A failed or
+ *  timed-out fetch is forgotten, so the next `/` asks again. */
 export function loadCatalog(botId: string): Promise<Catalog> {
   const hit = cache.get(botId)
   if (hit && Date.now() - hit.at < TTL) return hit.p
-  const p = hermes.request<any>(botId, 'commands.catalog', {}).then(buildCatalog)
-  p.catch(() => cache.delete(botId))
-  cache.set(botId, { at: Date.now(), p })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('commands.catalog timed out')), TIMEOUT)
+  })
+  const p = Promise.race([hermes.request<any>(botId, 'commands.catalog', {}).then(buildCatalog), timeout]).finally(() => clearTimeout(timer))
+  const entry = { at: Date.now(), p }
+  p.then(c => ready.set(botId, c)).catch(() => {
+    if (cache.get(botId) === entry) cache.delete(botId)
+  })
+  cache.set(botId, entry)
   return p
+}
+
+/** Drop what we know about a bot's commands (it reconnected: its gateway may have restarted). */
+export function forgetCatalog(botId: string) {
+  cache.delete(botId)
 }
 
 /** The catalog if it's already loaded, for synchronous checks while typing. */
