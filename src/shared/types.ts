@@ -71,6 +71,61 @@ export interface Workstream {
   closedAt: number
 }
 
+/** A Hermes Kanban board on a bot's host (boards are shared by every profile on that host). */
+export interface KanbanBoardInfo {
+  slug: string
+  name: string
+  /** Hermes's active board, the one new tasks land on. */
+  current: boolean
+  /** Live tasks (archived ones excluded). */
+  total: number
+  /** Tasks per status. */
+  counts: Record<string, number>
+}
+
+export interface KanbanCard {
+  id: string
+  title: string
+  status: string
+  assignee: string
+  priority: number
+  createdAt: number
+  /** When the current run started (running tasks). */
+  runStartedAt: number
+  completedAt: number
+  /** The latest run's hand-off summary, a short preview. */
+  summary: string
+  comments: number
+  parents: number
+  children: number
+  /** Hermes's health warnings for the task (stuck, failing, …). */
+  warnings: { count: number; severity: string } | null
+  /** Why it's blocked: dependency, human, … */
+  blockKind: string
+}
+
+export interface KanbanBoard {
+  /** In Hermes's workflow order: triage, todo, scheduled, ready, running, blocked, review, done. */
+  columns: { status: string; cards: KanbanCard[] }[]
+  /** Server clock, seconds. */
+  now: number
+}
+
+export interface KanbanTaskDetail {
+  card: KanbanCard
+  body: string
+  result: string
+  /** The latest run's full summary. */
+  summary: string
+  createdBy: string
+  lastError: string
+  parents: { id: string; title: string; status: string }[]
+  children: { id: string; title: string; status: string }[]
+  comments: { author: string; body: string; at: number }[]
+  runs: { id: number; profile: string; status: string; outcome: string; summary: string; error: string; startedAt: number; endedAt: number }[]
+  diagnostics: { severity: string; title: string; detail: string }[]
+}
+
 export interface ReplyNotice {
   botId: string
   sessionId: string
@@ -104,6 +159,14 @@ export interface HermesBridge {
   readDataUrl(botId: string, filePath: string): Promise<string>
   /** The bot's workstreams from the Conduit plugin's registry ([] when it has none). */
   workstreams(botId: string): Promise<Workstream[]>
+  /** Every pinned session (raw `/api/sessions` rows), including ones too old for `session.list`. */
+  pinnedSessions(botId: string): Promise<Record<string, any>[]>
+  /** Read-only views of Hermes Kanban on the bot's host, from its dashboard API. */
+  kanbanBoards(botId: string): Promise<KanbanBoardInfo[]>
+  kanbanBoard(botId: string, board: string): Promise<KanbanBoard>
+  kanbanTask(botId: string, board: string, taskId: string): Promise<KanbanTaskDetail>
+  /** Comment on a task, and with `unblock` send a blocked task back to the queue. */
+  kanbanReply(botId: string, board: string, taskId: string, body: string, unblock: boolean): Promise<void>
   onEvent(cb: (e: GatewayEventEnvelope) => void): () => void
   onRequest(cb: (r: ServerRequestEnvelope) => void): () => void
   onStatus(cb: (s: BotStatus) => void): () => void

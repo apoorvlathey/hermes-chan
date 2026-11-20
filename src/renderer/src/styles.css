@@ -3943,3 +3943,1042 @@ button.ghost {
 .background-done.failed .handoff-from {
   color: var(--danger);
 }
+
+/* ─── kanban ──────────────────────────────────────────────────────────────── */
+
+:root {
+  --kb-run: #b8860b;
+  --kb-review: #7c5cd6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --kb-run: var(--gold);
+    --kb-review: #a993f0;
+  }
+}
+
+/* The sidebar's way in: a row like a chat's, above the chat list. */
+.nav {
+  padding: 4px 8px 2px;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 9px;
+  border-radius: 9px;
+  color: var(--text-2);
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.nav-row:hover {
+  background: var(--raise);
+}
+
+.nav-row.active {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+.nav-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--text-3);
+}
+
+.nav-row.active .nav-icon {
+  color: var(--text-2);
+}
+
+.nav-label {
+  flex: 1;
+  font-size: 13px;
+}
+
+.nav-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 11px var(--round);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--kb-run);
+  animation: nav-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes nav-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.nav-attention {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+  font: 700 10px/16px var(--round);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The board view */
+.kanban {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.kanban-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--raise);
+  color: var(--text-2);
+}
+
+.kanban-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.kanban-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 190px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 9px;
+  background: var(--raise);
+  color: var(--text-3);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.kanban-filter:focus-within {
+  background: var(--panel);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.kanban-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: 13px var(--font);
+}
+
+.kanban-filter input::placeholder {
+  color: var(--text-3);
+}
+
+.kanban-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-3);
+}
+
+.kanban-select select {
+  appearance: none;
+  height: 30px;
+  max-width: 200px;
+  padding: 0 26px 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--raise);
+  color: var(--text-2);
+  font: 13px var(--font);
+  cursor: pointer;
+  outline: 0;
+}
+
+.kanban-select select:hover {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+.kanban-select select:focus-visible {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--gold) 70%, transparent);
+}
+
+.kanban-select svg {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
+}
+
+.kanban-refresh {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--text-3);
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.kanban-refresh:hover:not(:disabled) {
+  background: var(--raise);
+  color: var(--text);
+}
+
+.kanban-refresh:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.kanban-refresh.spinning svg {
+  animation: ws-spin 0.9s linear infinite;
+}
+
+.kanban-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.kanban-cols {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  padding: 14px 20px 0;
+  overflow-x: auto;
+}
+
+/* Columns */
+.kb-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 248px;
+  max-width: 330px;
+  min-height: 0;
+}
+
+.kb-col-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font: 600 12px var(--round);
+  color: var(--text-2);
+}
+
+.kb-count {
+  color: var(--text-3);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 2px 20px;
+}
+
+/* An empty column folds to a slim rail so the workflow stays visible without taking room. */
+.kb-rail {
+  display: flex;
+  flex: 0 0 26px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  writing-mode: vertical-rl;
+  font: 600 11.5px var(--round);
+  color: var(--text-3);
+  opacity: 0.7;
+  user-select: none;
+}
+
+.kb-glyph {
+  flex: none;
+  color: var(--text-3);
+}
+
+.kb-glyph.g-ready {
+  color: var(--text-2);
+}
+
+.kb-glyph.g-running {
+  color: var(--kb-run);
+}
+
+.kb-glyph.g-running .kb-spin {
+  transform-origin: 8px 8px;
+  animation: ws-spin 1.1s linear infinite;
+}
+
+.kb-glyph.g-blocked,
+.kb-glyph.g-failed {
+  color: var(--danger);
+}
+
+.kb-glyph.g-review {
+  color: var(--kb-review);
+}
+
+.kb-glyph.g-done {
+  color: var(--ok);
+}
+
+/* Cards */
+.kb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  box-shadow: 0 1px 1px rgba(30, 20, 50, 0.03);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.kb-card:hover {
+  border-color: var(--line-2);
+}
+
+.kb-card.selected {
+  border-color: color-mix(in srgb, var(--gold) 75%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+.kb-card:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--gold) 75%, transparent);
+}
+
+.kb-card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.s-done .kb-card-title {
+  color: var(--text-2);
+}
+
+.kb-note {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.kb-note.bad {
+  color: var(--danger);
+}
+
+.kb-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.kb-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.kb-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.kb-icons {
+  display: inline-flex;
+  gap: 9px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-icons > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.kb-warn {
+  color: var(--kb-run);
+}
+
+.kb-warn.bad {
+  color: var(--danger);
+}
+
+.kb-more {
+  padding: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.kb-more:hover {
+  background: var(--raise);
+  color: var(--text-2);
+}
+
+.kb-card-skel {
+  gap: 8px;
+  pointer-events: none;
+}
+
+.kb-skel {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.kb-skel.small {
+  height: 8px;
+}
+
+/* Empty / error states */
+.kanban-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 40px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.kanban-empty h3 {
+  margin: 10px 0 0;
+  font: 600 15px var(--round);
+  color: var(--text);
+}
+
+.kanban-empty p {
+  max-width: 380px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.kb-retry {
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--raise);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.kb-retry:hover {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+/* Task panel */
+.kb-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 440px;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  animation: ws-in 0.22s var(--ease);
+}
+
+@media (max-width: 1100px) {
+  .kb-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(440px, 100%);
+    box-shadow: var(--shadow);
+    z-index: 3;
+  }
+}
+
+.kb-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.kb-panel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font: 600 12.5px var(--round);
+  color: var(--text-2);
+}
+
+.kb-panel-why {
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.kb-panel-status.s-blocked .kb-panel-why {
+  color: var(--danger);
+}
+
+.kb-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border-radius: 8px;
+  color: var(--text-3);
+}
+
+.kb-close:hover {
+  background: var(--raise);
+  color: var(--text);
+}
+
+.kb-panel-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px 28px;
+  user-select: text;
+}
+
+.kb-panel-title {
+  margin: 0 0 8px;
+  font: 600 17px/1.35 var(--round);
+  overflow-wrap: anywhere;
+}
+
+.kb-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.kb-id {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.kb-panel-loading {
+  height: 120px;
+  margin-top: 18px;
+  border-radius: 10px;
+}
+
+.kb-error {
+  margin-top: 14px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.kb-diags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-diags li {
+  color: var(--kb-run);
+}
+
+.kb-diags li.bad {
+  color: var(--danger);
+}
+
+.kb-diags button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  color: inherit;
+  user-select: text;
+}
+
+.kb-diags button:hover {
+  background: var(--raise);
+}
+
+.kb-diags svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.kb-diags button > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kb-diags strong,
+.kb-diags button > span > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kb-diags strong {
+  -webkit-line-clamp: 2;
+  font-weight: 600;
+}
+
+.kb-diags button > span > span {
+  -webkit-line-clamp: 3;
+  color: var(--text-2);
+}
+
+.kb-diags li.open strong,
+.kb-diags li.open button > span > span {
+  -webkit-line-clamp: unset;
+}
+
+.kb-section {
+  margin: 20px -20px 0;
+  padding: 16px 20px 0;
+  border-top: 1px solid var(--line);
+}
+
+.kb-section h4 {
+  margin: 0 0 10px;
+  font: 600 11px var(--round);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.kb-section .md {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.kb-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.kb-pre {
+  margin: 0;
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb-pre.bad,
+.kb-run-text.bad,
+.kb-run-outcome.bad {
+  color: var(--danger);
+}
+
+.kb-links {
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-links button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.kb-links button:hover:not(:disabled) {
+  background: var(--raise);
+}
+
+.kb-links button:disabled {
+  cursor: default;
+}
+
+.kb-link-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-link-status {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.kb-comments,
+.kb-runs {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Comments: each its own quiet block, yours tinted. */
+.kb-comments {
+  gap: 8px;
+}
+
+.kb-comment {
+  padding: 10px 12px 11px;
+  border-radius: 10px;
+  background: var(--raise);
+}
+
+.kb-comment.mine {
+  background: color-mix(in srgb, var(--gold) 9%, transparent);
+}
+
+.kb-comment-head,
+.kb-run-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.kb-comment-head {
+  margin-bottom: 6px;
+}
+
+.kb-comment-avatar {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--raise-2);
+  color: var(--text-2);
+  font: 700 10px var(--round);
+}
+
+.kb-comment.mine .kb-comment-avatar {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+
+.kb-comment-head strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.kb-comment-body .md {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.kb-comment-body.folded {
+  max-height: 8.4em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+
+.kb-comment-more {
+  margin-top: 4px;
+  font: 500 12px var(--font);
+  color: var(--text-3);
+}
+
+.kb-comment-more:hover {
+  color: var(--text);
+}
+
+/* Runs: a compact history, newest first, one hairline apart. */
+.kb-runs > li {
+  padding: 9px 0;
+}
+
+.kb-runs > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.kb-runs > li:first-child {
+  padding-top: 0;
+}
+
+.kb-run-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.tone-ok .kb-run-dot {
+  background: var(--ok);
+}
+
+.tone-bad .kb-run-dot {
+  background: var(--danger);
+}
+
+.tone-live .kb-run-dot {
+  background: var(--kb-run);
+  animation: nav-pulse 1.8s ease-in-out infinite;
+}
+
+.kb-run-outcome {
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: capitalize;
+}
+
+.kb-run-when {
+  margin-left: auto;
+}
+
+.kb-run-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 4px 0 0 15px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.kanban-stale {
+  color: var(--danger);
+}
+
+/* An empty Running column mustn't look busy: its spinner only turns when something is running. */
+.kb-rail .kb-glyph.g-running .kb-spin {
+  animation: none;
+}
+
+.kb-rail .kb-glyph {
+  color: var(--text-3);
+}
+
+/* Kanban updates in a chat: one row per task change. */
+.kbu-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.kbu-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.kbu-row + .kbu-row {
+  border-top: 1px solid var(--line);
+}
+
+.kbu-row > .kb-glyph {
+  margin-top: 3px;
+}
+
+.kbu-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.kbu-title {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.kbu-title:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--text-3);
+  text-underline-offset: 3px;
+}
+
+.kbu-event {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.kbu-event.bad {
+  color: var(--danger);
+}
+
+.kbu-who {
+  color: var(--text-3);
+}
+
+.kbu-detail {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.kbu-detail.open {
+  -webkit-line-clamp: unset;
+}
+
+.kbu-more {
+  margin: 0 14px 10px;
+}
+
+/* Answering a task, at the foot of its panel */
+.kb-reply {
+  flex: none;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.kb-reply textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  max-height: 200px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--canvas);
+  color: var(--text);
+  font: 13px/1.5 var(--font);
+  resize: none;
+  field-sizing: content;
+  outline: 0;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kb-reply textarea:focus {
+  border-color: color-mix(in srgb, var(--gold) 70%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 18%, transparent);
+}
+
+.kb-reply textarea::placeholder {
+  color: var(--text-3);
+}
+
+.kb-reply-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.kb-reply-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.kb-reply-note.bad {
+  color: var(--danger);
+}
+
+.kb-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--raise);
+  color: var(--text-2);
+  font: 500 12.5px var(--font);
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+
+.kb-btn:hover:not(:disabled) {
+  background: var(--raise-2);
+  color: var(--text);
+}
+
+.kb-btn.primary {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+
+.kb-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 88%, white);
+  color: var(--gold-ink);
+}
+
+.kb-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

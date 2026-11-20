@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { Chat } from './Chat'
+import { Kanban } from './Kanban'
 import { Setup } from './Setup'
 import { Sidebar } from './Sidebar'
 import { getState, newChat, openBot, useStore } from './store'
@@ -39,7 +40,9 @@ export function App() {
     <div className="app">
       <Sidebar />
       <main className="main">
-        {view ? (
+        {view?.kind === 'kanban' ? (
+          <Kanban />
+        ) : view ? (
           <div className="main-split">
             <Chat />
             <WorkstreamsPanel />

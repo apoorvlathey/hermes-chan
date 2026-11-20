@@ -2,11 +2,11 @@
  *  `useStore(selector)`. Threads are keyed `${botId}:${rootSessionId}`. */
 import { useRef, useSyncExternalStore } from 'react'
 
-import type { AppConfig, BotStatus, GatewayEventEnvelope, ServerRequestEnvelope, Workstream } from '../../shared/types'
+import type { AppConfig, BotStatus, GatewayEventEnvelope, KanbanBoardInfo, ServerRequestEnvelope, Workstream } from '../../shared/types'
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
 import { CLIENT_COMMANDS, loadCatalog, parseSlash } from './slash'
-import { backgroundDone, type BackgroundDone, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
+import { backgroundDone, type BackgroundDone, kanbanUpdates, type KanbanUpdate, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -86,6 +86,8 @@ export type Item =
   | { kind: 'cron'; id: string; job: string; text: string; failed?: boolean; ts?: number }
   /** A subagent or background process finished (Hermes hands its report to the bot). */
   | ({ kind: 'background'; id: string; ts?: number } & BackgroundDone)
+  /** Hermes reporting Kanban task status changes (done, blocked, crashed…). */
+  | { kind: 'kanban'; id: string; updates: KanbanUpdate[]; ts?: number }
   | { kind: 'handoff'; id: string; from: string; type: 'brief' | 'follow-up'; text: string; quote?: string; ts?: number }
 
 export interface Thread {
@@ -124,7 +126,12 @@ export interface Prompt {
   choices?: string[]
 }
 
-export type View = { kind: 'bot'; botId: string } | { kind: 'session'; key: string } | { kind: 'new'; botId: string }
+export type View =
+  | { kind: 'bot'; botId: string }
+  | { kind: 'session'; key: string }
+  | { kind: 'new'; botId: string }
+  /** The Kanban board of this bot's host. */
+  | { kind: 'kanban'; botId: string }
 
 interface State {
   /** The message the composer is replying to, for the chat it was picked in. */
@@ -149,6 +156,10 @@ interface State {
   workstreams: Record<string, Workstream[]>
   /** The workstreams panel on the right is open. */
   showWorkstreams: boolean
+  /** Kanban boards per host (see `hostKey`), when loaded. */
+  kanbanBoards: Record<string, KanbanBoardInfo[]>
+  /** A task to open when the board next shows (from a Kanban update in a chat). */
+  kanbanFocus: { board: string; taskId: string } | null
 }
 
 // ─── store core ─────────────────────────────────────────────────────────────────────────────────
@@ -185,7 +196,9 @@ let state: State = {
   search: '',
   windowFocused: document.hasFocus(),
   workstreams: {},
-  showWorkstreams: prefs.showWorkstreams ?? true
+  showWorkstreams: prefs.showWorkstreams ?? true,
+  kanbanBoards: {},
+  kanbanFocus: null
 }
 
 const listeners = new Set<() => void>()
@@ -246,6 +259,7 @@ export const focusedKey = (s: State = state): string | null => {
   const v = s.view
   if (!v) return null
   if (v.kind === 'session') return v.key
+  if (v.kind === 'kanban') return null
   if (v.kind === 'bot') {
     const c = s.bots[v.botId]?.canonical
     return c ? threadKey(v.botId, c.id) : `${v.botId}:botchat`
@@ -330,15 +344,38 @@ async function refreshBot(botId: string) {
   const profile = cfg.transport.profile
   try {
     // The stored picker lists closed sessions; sessions open in a gateway process are 'live'. Merge both.
-    const [profiles, stored, live] = await Promise.all([
+    const [profiles, stored, live, pins] = await Promise.all([
       hermes.request<{ profiles: any[] }>(botId, 'profiles.list', {}),
       hermes.request<{ sessions: any[] }>(botId, 'session.list', { scope: 'stored', picker: true, limit: 200 }),
-      hermes.request<{ sessions: any[] }>(botId, 'session.list', { picker: true, limit: 200 }).catch(() => ({ sessions: [] }))
+      hermes.request<{ sessions: any[] }>(botId, 'session.list', { picker: true, limit: 200 }).catch(() => ({ sessions: [] })),
+      // session.list stops at the newest 200, and a busy bot's cron runs push older pins past that.
+      hermes.pinnedSessions(botId).catch(() => null)
     ])
     const byId = new Map<string, any>()
     for (const r of [...stored.sessions, ...live.sessions]) {
       const prev = byId.get(r.id)
       byId.set(r.id, prev ? { ...prev, ...Object.fromEntries(Object.entries(r).filter(([, v]) => v !== null && v !== '')) } : r)
+    }
+    for (const r of pins ?? []) {
+      if (byId.has(r.id)) continue
+      byId.set(r.id, {
+        id: r.id,
+        title: r.title,
+        source: r.source,
+        preview: r.preview,
+        last_active_at: r.last_active || r.started_at,
+        started_at: r.started_at,
+        message_count: r.message_count,
+        pinned: true
+      })
+    }
+    // Pins couldn't be fetched this time: keep the ones already on screen rather than dropping them.
+    if (!pins) {
+      for (const r of state.sessions[botId] ?? []) {
+        if (r.pinned && !byId.has(r.id)) {
+          byId.set(r.id, { id: r.id, session_id: r.resumeId, title: r.title, source: r.source, preview: r.preview, last_active_at: r.lastActive, message_count: r.messageCount, pinned: true })
+        }
+      }
     }
     const list = { sessions: [...byId.values()] }
     const p = profiles.profiles.find(x => x.name === profile) ?? profiles.profiles.find(x => x.is_default)
@@ -461,6 +498,11 @@ function mapMessages(messages: any[]): Item[] {
       const done = backgroundDone(m, raw)
       if (done) {
         out.push({ kind: 'background', id: nid(), ts, ...done })
+        continue
+      }
+      const updates = kanbanUpdates(m, raw)
+      if (updates) {
+        out.push({ kind: 'kanban', id: nid(), ts, updates })
         continue
       }
       const report = cronReport(m, raw)
@@ -1283,6 +1325,60 @@ export async function loadWorkstreams(botId: string) {
     set(s => ({ workstreams: { ...s.workstreams, [botId]: list } }))
   } catch {
     /* offline or unreadable: keep the last list */
+  }
+}
+
+// ─── kanban ─────────────────────────────────────────────────────────────────────────────────────
+
+/** Kanban boards live on a host and every profile there shares them, so bots are grouped by host. */
+export function hostKey(botId: string, s: State = state): string {
+  const t = s.config?.bots.find(b => b.id === botId)?.transport
+  return !t ? botId : t.kind === 'ssh' ? `ssh:${t.host}` : 'local'
+}
+
+/** The bot whose view (chat, Bot Chat or board) is on screen. */
+export function viewBot(s: State = state): string | undefined {
+  const v = s.view
+  if (!v) return undefined
+  return v.kind === 'session' ? s.threads[v.key]?.botId : v.botId
+}
+
+/** One bot per host to read its boards through, preferring one that's online. */
+export function kanbanHosts(s: State = state): { key: string; label: string; botId: string; bots: string[] }[] {
+  const hosts = new Map<string, { key: string; label: string; botId: string; bots: string[] }>()
+  for (const b of s.config?.bots ?? []) {
+    const key = hostKey(b.id, s)
+    const name = s.bots[b.id]?.name ?? b.name ?? b.id
+    const h = hosts.get(key)
+    if (!h) {
+      hosts.set(key, { key, label: b.transport.kind === 'ssh' ? b.transport.host : 'This Mac', botId: b.id, bots: [name] })
+      continue
+    }
+    h.bots.push(name)
+    if (s.statuses[h.botId]?.state !== 'ready' && s.statuses[b.id]?.state === 'ready') h.botId = b.id
+  }
+  return [...hosts.values()]
+}
+
+/** Open the Kanban board, on the host of the bot in view unless another bot is given, optionally with
+ *  one task open. */
+export function openKanban(botId?: string, focus?: { board: string; taskId: string }) {
+  const id = botId ?? viewBot() ?? prefs.lastBot ?? state.config?.bots[0]?.id
+  if (!id) return
+  const host = kanbanHosts().find(h => h.key === hostKey(id))
+  set({ view: { kind: 'kanban', botId: host?.botId ?? id }, kanbanFocus: focus ?? null })
+}
+
+export const clearKanbanFocus = () => state.kanbanFocus && set({ kanbanFocus: null })
+
+export async function loadKanbanBoards(botId: string) {
+  try {
+    const boards = await hermes.kanbanBoards(botId)
+    set(s => ({ kanbanBoards: { ...s.kanbanBoards, [hostKey(botId)]: boards } }))
+    return boards
+  } catch (err) {
+    set(s => ({ kanbanBoards: { ...s.kanbanBoards, [hostKey(botId)]: s.kanbanBoards[hostKey(botId)] ?? [] } }))
+    throw err
   }
 }
 

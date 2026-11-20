@@ -320,3 +320,67 @@ function tidyResult(text: string): string {
   }
   return t
 }
+
+// ─── Kanban task updates ────────────────────────────────────────────────────────────────────────
+
+export interface KanbanUpdate {
+  taskId: string
+  board: string
+  assignee: string
+  /** done | blocked | crashed | gave_up | other */
+  event: string
+  /** "Done", "Worker crashed, will retry", … */
+  label: string
+  title?: string
+  /** The result, block reason or failure output, as Hermes wrote it (often cut short). */
+  detail?: string
+}
+
+// "✔ [default] @default Kanban t_500b301e done — ETH.sh GH-73: …" (the gateway's batched notifier)
+const KB_LINE_RE = /^\S{0,3}\s*\[([^\]\n]+)\]\s+@(\S+)\s+Kanban\s+(t_[\w-]+)\s+(.+)$/
+// "[kanban] Task t_16536654 crashed (worker exited); dispatcher will retry." (one task, to the bot)
+const KB_NOTICE_RE = /^\[kanban\] Task (t_[\w-]+) (.+?)\.?\s*$/
+const KB_RESTATED_RE = /^\[STILL IN PROGRESS[^\]\n]*\]\s*$/
+
+function kanbanEvent(text: string): Pick<KanbanUpdate, 'event' | 'label' | 'title' | 'detail'> {
+  const t = text.trim()
+  let m: RegExpExecArray | null
+  if ((m = /^(?:done|completed)(?:\s+[—–-]\s+(.+))?$/i.exec(t))) return { event: 'done', label: 'Done', title: m[1]?.trim() }
+  if ((m = /^blocked(?::\s*([\s\S]+)|;\s*needs attention)?$/i.exec(t))) return { event: 'blocked', label: 'Blocked', detail: m[1]?.trim() }
+  if (/crashed/i.test(t)) return { event: 'crashed', label: /retry/i.test(t) ? 'Worker crashed, will retry' : 'Worker crashed' }
+  if (/gave up/i.test(t)) return { event: 'gave_up', label: 'Gave up after repeated failures' }
+  return { event: 'other', label: t.charAt(0).toUpperCase() + t.slice(1) }
+}
+
+/** Hermes's Kanban status updates in a chat: a batch of notifier lines, or a single `[kanban] Task …`
+ *  notice to the bot. Both are stored as `user` rows; they're Hermes reporting, not you. */
+export function kanbanUpdates(m: { role: string; display_kind?: string | null }, raw: string): KanbanUpdate[] | null {
+  if (m.role !== 'user' || (m.display_kind && m.display_kind !== 'internal_notification')) return null
+  const lines = raw.replace(/\r/g, '').split('\n')
+  while (lines.length && (!lines[0]!.trim() || KB_RESTATED_RE.test(lines[0]!))) lines.shift()
+  if (!lines.length) return null
+
+  const notice = KB_NOTICE_RE.exec(lines[0]!)
+  if (notice) {
+    const field = (name: string) => lines.find(l => l.startsWith(`${name}: `))?.slice(name.length + 2).trim()
+    const ev = kanbanEvent(notice[2]!)
+    return [{ taskId: notice[1]!, board: field('Board') ?? '', assignee: (field('Assignee') ?? '').replace(/^@/, ''), ...ev, title: field('Title') ?? ev.title, detail: field('Result') ?? ev.detail }]
+  }
+
+  const out: KanbanUpdate[] = []
+  for (const line of lines) {
+    const hit = KB_LINE_RE.exec(line.trim())
+    if (hit) {
+      out.push({ taskId: hit[3]!, board: hit[1]!, assignee: hit[2]!, ...kanbanEvent(hit[4]!) })
+    } else if (line.trim()) {
+      // A continuation line: the previous update's result or failure output.
+      const last = out[out.length - 1]
+      if (!last) return null
+      last.detail = last.detail ? `${last.detail}\n${line.trim()}` : line.trim()
+    }
+  }
+  if (!out.length) return null
+  // Crash lines carry no title; borrow it from another line about the same task.
+  for (const u of out) u.title ??= out.find(o => o.taskId === u.taskId && o.title)?.title
+  return out
+}

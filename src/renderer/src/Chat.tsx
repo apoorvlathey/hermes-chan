@@ -22,17 +22,19 @@ import {
   type Draft,
   type Item,
   type Prompt,
-  type ToolInfo
+  type ToolInfo,
+  openKanban
 } from './store'
 import { BotDayDivider, BotTime, localDay } from './botChat'
 import { CodeBlock } from './CodeBlock'
+import { BoardIcon, StatusIcon } from './Kanban'
 import { hermes } from './bridge'
 import { Highlighted } from './highlight'
 import { ModelPicker } from './ModelPicker'
 import { useSlashMenu } from './SlashMenu'
 import { clock } from './time'
 import { describeTool, splitPath, summarize, type ToolKind, type ToolView } from './toolView'
-import { splitRefs, type ReplyQuote } from './transcript'
+import { splitRefs, type KanbanUpdate, type ReplyQuote } from './transcript'
 import { BackToBotChat, WorkstreamsToggle } from './Workstreams'
 
 const GREETINGS = [
@@ -88,7 +90,7 @@ function SessionChip({ id, profile, botId, children }: { id: string; profile?: s
 // Highlight only fences that name their language (no guessing on plain blocks); unknown names stay plain.
 const REHYPE: NonNullable<Parameters<typeof ReactMarkdown>[0]['rehypePlugins']> = [[rehypeHighlight, { detect: false }]]
 
-const Markdown = memo(function Markdown({ text, botId }: { text: string; botId: string }) {
+export const Markdown = memo(function Markdown({ text, botId }: { text: string; botId: string }) {
   const source = useMemo(() => linkMentions(text), [text])
   return (
     <div className="md">
@@ -474,6 +476,91 @@ function BackgroundCard({ item, bot }: { item: Extract<Item, { kind: 'background
   )
 }
 
+// ─── Kanban updates ────────────────────────────────────────────────────────────────────────────
+
+const UPDATE_GLYPH: Record<string, string> = { done: 'done', blocked: 'blocked', crashed: 'failed', gave_up: 'failed' }
+const UPDATES_SHOWN = 4
+
+/** Titles of a board's tasks, read once a minute at most and shared by every update card. */
+const titleCache = new Map<string, { at: number; p: Promise<Map<string, string>> }>()
+function boardTitles(botId: string, board: string): Promise<Map<string, string>> {
+  const key = `${botId}/${board}`
+  const hit = titleCache.get(key)
+  if (hit && Date.now() - hit.at < 60_000) return hit.p
+  const p = hermes
+    .kanbanBoard(botId, board)
+    .then(b => new Map(b.columns.flatMap(c => c.cards.map(t => [t.id, t.title] as const))))
+  p.catch(() => titleCache.delete(key))
+  titleCache.set(key, { at: Date.now(), p })
+  return p
+}
+
+/** Hermes reporting Kanban task changes: a compact list instead of a wall of notifier text. */
+function KanbanUpdatesCard({ item, bot }: { item: Extract<Item, { kind: 'kanban' }>; bot: Bot }) {
+  const [all, setAll] = useState(false)
+  const [titles, setTitles] = useState<Map<string, string>>(new Map())
+  const untitled = item.updates.filter(u => !u.title)
+  const board = untitled[0]?.board
+  useEffect(() => {
+    if (!board) return
+    let live = true
+    boardTitles(bot.id, board)
+      .then(t => live && setTitles(t))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [bot.id, board])
+
+  const updates = all ? item.updates : item.updates.slice(0, UPDATES_SHOWN)
+  return (
+    <section className="handoff kanban-updates">
+      <header className="handoff-head">
+        <span className="cron-icon">
+          <BoardIcon size={14} />
+        </span>
+        <span className="handoff-from">Kanban</span>
+        {item.updates.length > 1 && <span className="handoff-kind">{item.updates.length} updates</span>}
+        {item.ts ? <span className="handoff-time">{clock(item.ts)}</span> : null}
+      </header>
+      <ul className="kbu-list">
+        {updates.map((u, i) => (
+          <KanbanUpdateRow key={i} u={u} title={u.title ?? titles.get(u.taskId)} botId={bot.id} />
+        ))}
+      </ul>
+      {item.updates.length > UPDATES_SHOWN && (
+        <button className="handoff-more kbu-more" onClick={() => setAll(a => !a)}>
+          {all ? 'Show less' : `Show ${item.updates.length - UPDATES_SHOWN} more`}
+        </button>
+      )}
+    </section>
+  )
+}
+
+function KanbanUpdateRow({ u, title, botId }: { u: KanbanUpdate; title?: string; botId: string }) {
+  const [open, setOpen] = useState(false)
+  const bad = u.event === 'crashed' || u.event === 'gave_up' || u.event === 'blocked'
+  return (
+    <li className="kbu-row">
+      <StatusIcon status={UPDATE_GLYPH[u.event] ?? 'other'} />
+      <div className="kbu-main">
+        <button className="kbu-title" onClick={() => openKanban(botId, { board: u.board, taskId: u.taskId })} title="Open on the Kanban board">
+          {title || u.taskId}
+        </button>
+        <div className={`kbu-event ${bad ? 'bad' : ''}`}>
+          {u.label}
+          {u.assignee && u.assignee !== 'default' && <span className="kbu-who"> · {u.assignee}</span>}
+        </div>
+        {u.detail && (
+          <button className={`kbu-detail ${open ? 'open' : ''}`} onClick={() => setOpen(o => !o)} title={open ? 'Show less' : 'Show more'}>
+            {u.detail}
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
+
 /** ANSI colour codes the CLI's command output carries. */
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
 
@@ -619,6 +706,7 @@ function Message({ item, bot, bubbles = false }: { item: Item; bot: Bot; bubbles
   if (item.kind === 'handoff') return <HandoffCard item={item} bot={bot} />
   if (item.kind === 'cron') return <CronOutputCard item={item} bot={bot} />
   if (item.kind === 'background') return <BackgroundCard item={item} bot={bot} />
+  if (item.kind === 'kanban') return <KanbanUpdatesCard item={item} bot={bot} />
   if (item.kind === 'command') return <CommandCard item={item} bot={bot} />
   if (item.kind === 'assistant') {
     return (

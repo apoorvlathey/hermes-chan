@@ -2,6 +2,7 @@
  *  be shown or screenshotted without connecting to any gateway or exposing real history. The main
  *  process starts no connections and uses a separate userData folder in this mode. */
 import type { BotStatus, HermesBridge, Workstream } from '../../shared/types'
+import { demoKanbanBoard, demoKanbanBoards, demoKanbanReply, demoKanbanTask } from './demoKanban'
 
 export const IS_DEMO = new URLSearchParams(location.search).has('demo')
 /** `?demo=onboarding`: no bots yet, so the app opens on its first-run setup screen. */
@@ -195,7 +196,19 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
       '**Three options, all with free cancellation:**\n\n| Guesthouse | Per night | Rating | Note |\n|---|---|---|---|\n| Casa do Largo | €104 | 9.1 | Courtyard rooms are the quiet ones |\n| Alfama Patio | €96 | 8.8 | 4 min to the tram, no lift |\n| Memória Hostel (private) | €82 | 9.3 | Shared kitchen |\n\nCasa do Largo is the best match for quiet; recent reviews mention thick walls and no street noise.',
       at(0, 9, 15)
     ),
-    bot('Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Want me to hold it?', at(0, 9, 16))
+    bot('Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Want me to hold it?', at(0, 9, 16)),
+    // Hermes's Kanban notifier: a batch of task changes, then a single notice handed to the bot.
+    user(
+      '✔ [default] @atlas Kanban t_7a20c3d2 done — Compare fares for the 14th\nCheapest sensible option: TP 1351 at 07:40, €212 return with a carry-on. Two others within €20.\n✖ [default] @atlas Kanban t_5e8a1b42 worker crashed (pid gone); dispatcher will retry\n⏸ [default] @atlas Kanban t_5e8a1b42 blocked: The accountant folder is shared view-only, so the receipts can’t be written there. Needs edit access or a different folder.\n✔ [default] @pixel Kanban t_0b5f3a17 done — Three logo directions for the newsletter\nWordmark, monogram and a small owl mark, each in light and dark.',
+      at(0, 9, 40)
+    ),
+    {
+      role: 'user',
+      display_kind: 'internal_notification',
+      text: '[kanban] Task t_6c2e4f96 completed.\nTitle: Fix the flaky integration tests on the api repo\nAssignee: @atlas\nBoard: default\n\nCheck the result or decide the next step.\nResult: Two tests shared a temp directory. Each now gets its own; 50 runs in a row pass.\n\nThis is an automatic task-status notification, not a request to decompose the task again. Inspect the current board before creating follow-up tasks; do not recreate tasks or graphs that already exist.',
+      timestamp: at(0, 9, 52)
+    },
+    bot('The api tests are fixed and the logo directions are in. One thing needs you: the receipts export is blocked on the accountant folder being view-only.', at(0, 9, 53))
   ],
   [BOT_CHAT('pixel')]: [
     user('morning! anything for me?', at(0, 10, 2)),
@@ -461,7 +474,13 @@ export function demoBridge(real: HermesBridge): HermesBridge {
   return {
     ...real,
     config: async () => ONBOARDING ? { bots: [], hiddenSources: ['cron', 'tool', 'kanban', 'subagent'] } : ({
-      bots: BOTS.map(b => ({ id: b.id, name: b.name, color: b.color, transport: { kind: 'local' as const, profile: 'default' } })),
+      // Sage runs on a home server, so the Kanban view has a second host to switch to.
+      bots: BOTS.map(b => ({
+        id: b.id,
+        name: b.name,
+        color: b.color,
+        transport: b.id === 'sage' ? { kind: 'ssh' as const, host: 'home-server', profile: 'research' } : { kind: 'local' as const, profile: 'default' }
+      })),
       hiddenSources: ['cron', 'tool', 'kanban', 'subagent']
     }),
     statuses: async () => statuses,
@@ -484,6 +503,17 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     uploadImage: async (_b, _d, filename) => ({ path: `/demo/${filename}`, mime: 'image/png' }),
     readDataUrl: async () => avatar('hsl(220 20% 30%)', '🖼️'),
     workstreams: async botId => WORKSTREAMS[botId] ?? [],
+    pinnedSessions: async () => [],
+    kanbanBoards: async botId => demoKanbanBoards(botId),
+    kanbanBoard: async (botId, board) => {
+      await new Promise(r => setTimeout(r, 250))
+      return demoKanbanBoard(botId, board)
+    },
+    kanbanTask: async (botId, board, id) => demoKanbanTask(botId, board, id),
+    kanbanReply: async (botId, board, id, body, unblock) => {
+      await new Promise(r => setTimeout(r, 400))
+      demoKanbanReply(botId, board, id, body, unblock)
+    },
     desktopModelPrefs: async () => ({ favorites: ['anthropic::claude-opus-5.5', 'openai-codex::gpt-6.1-sol'], presets: {} }),
     onEvent: () => () => undefined,
     onRequest: () => () => undefined,

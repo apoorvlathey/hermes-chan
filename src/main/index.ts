@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, Notification, powerMonitor, s
 import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ReplyNotice, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection, friendlyError } from './bots'
 import { CONFIG_PATH, loadConfig, saveConfig } from './config'
+import { kanbanBoard, kanbanBoards, kanbanReply, kanbanTask } from './kanban'
 import { scanLocal, scanRemote, sshHosts } from './setup'
 import { closeTransports } from './transport'
 import { listWorkstreams } from './workstreams'
@@ -132,6 +133,32 @@ ipcMain.handle('hermes:workstreams', async (_e, botId: string) => {
     throw new Error(JSON.stringify({ message: friendlyError(err) }))
   }
 })
+/** Read-only Kanban: the renderer names a bot and a board/task; main resolves the connection. */
+const withBot = async <T>(botId: string, read: (conn: BotConnection) => Promise<T>) => {
+  const conn = bots.get(botId)
+  if (!conn) throw new Error(`unknown bot ${botId}`)
+  try {
+    return await read(conn)
+  } catch (err) {
+    throw new Error(JSON.stringify({ message: friendlyError(err) }))
+  }
+}
+/** Every pinned chat, however old. The gateway's `session.list` returns only the newest rows, so a
+ *  pin can fall out of it; the dashboard API back-fills pins (the Hermes desktop app's source). */
+ipcMain.handle('hermes:pinned-sessions', (_e, botId: string) =>
+  withBot(botId, async c => {
+    const r = await c.apiGet<{ sessions?: Record<string, unknown>[] }>('/api/sessions', { limit: '1', order: 'recent', archived: 'exclude' })
+    return (r.sessions ?? []).filter(x => x.pinned)
+  })
+)
+ipcMain.handle('hermes:kanban-boards', (_e, botId: string) => withBot(botId, c => kanbanBoards(c)))
+ipcMain.handle('hermes:kanban-board', (_e, botId: string, board: string) => withBot(botId, c => kanbanBoard(c, String(board))))
+ipcMain.handle('hermes:kanban-reply', (_e, botId: string, board: string, taskId: string, body: string, unblock: boolean) =>
+  withBot(botId, c => kanbanReply(c, String(board), String(taskId), String(body ?? ''), unblock === true))
+)
+ipcMain.handle('hermes:kanban-task', (_e, botId: string, board: string, taskId: string) =>
+  withBot(botId, c => kanbanTask(c, String(board), String(taskId)))
+)
 /** Favourite models and per-model presets from Hermes Desktop's own preferences, so the picker
  *  starts with the same stars and fast/effort defaults. Read-only; missing file → empty. */
 ipcMain.handle('hermes:desktop-model-prefs', () => {

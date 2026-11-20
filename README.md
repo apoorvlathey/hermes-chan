@@ -42,6 +42,9 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
 - **Workstreams panel.** If your bot uses the Conduit plugin's workstreams (W1, W2…), a panel on the right of
   its Bot Chat shows what it's working on in the background: status, step progress and the current step. Click one
   to open its session, even while Hermes keeps it out of the chat list.
+- **Kanban.** Hermes's task board, from the sidebar: what's queued, running, blocked or waiting for review,
+  across every board on each machine your bots run on. Open a task to read its description, latest summary,
+  dependencies, comments and run history. Read-only; it uses the same Kanban API as the Hermes desktop app.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
 
 <table>

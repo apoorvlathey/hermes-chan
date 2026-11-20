@@ -1,10 +1,16 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Avatar } from './Avatar'
+import { BoardIcon } from './Kanban'
 import {
   botBusy,
   botUnread,
   hiddenRoutineCount,
+  hostKey,
+  kanbanHosts,
+  lastBotId,
+  loadKanbanBoards,
+  openKanban,
   markAllRead,
   unreadSessions,
   isUnread,
@@ -20,6 +26,7 @@ import {
   setSearch,
   toggleRoutine,
   useStore,
+  viewBot,
   visibleSessions,
   type SessionRow
 } from './store'
@@ -331,6 +338,58 @@ function SessionList() {
   )
 }
 
+const BOARDS_POLL_MS = 60_000
+
+/** The way into the Kanban board of the host of the bot in view, with what's moving on it. */
+function KanbanLink() {
+  const botId = useStore(s => viewBot(s) ?? lastBotId() ?? s.config?.bots[0]?.id)
+  const host = useStore(s => (botId ? kanbanHosts(s).find(h => h.key === hostKey(botId, s)) : undefined))
+  const active = useStore(s => s.view?.kind === 'kanban')
+  const online = useStore(s => !!host && s.statuses[host.botId]?.state === 'ready')
+  const boards = useStore(s => (botId ? s.kanbanBoards[hostKey(botId, s)] : undefined))
+  const readVia = host?.botId
+
+  // Keep the counts fresh while the board itself isn't open (it polls on its own).
+  useEffect(() => {
+    if (!readVia || !online || active) return
+    const load = () => void loadKanbanBoards(readVia).catch(() => undefined)
+    load()
+    const t = setInterval(load, BOARDS_POLL_MS)
+    window.addEventListener('focus', load)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', load)
+    }
+  }, [readVia, online, active])
+
+  if (!host) return null
+  const count = (status: string) => (boards ?? []).reduce((n, b) => n + (b.counts[status] ?? 0), 0)
+  const running = count('running')
+  const attention = count('blocked') + count('triage')
+  const open = (boards ?? []).reduce((n, b) => n + b.total, 0) - count('done')
+  const hint = [running && `${running} running`, attention && `${attention} need${attention === 1 ? 's' : ''} attention`, !running && !attention && open && `${open} open`]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <div className="nav">
+      <button className={`nav-row ${active ? 'active' : ''}`} onClick={() => openKanban(botId)} title={`Kanban on ${host.label} (${host.bots.join(', ')})${hint ? `: ${hint}` : ''}`}>
+        <span className="nav-icon">
+          <BoardIcon size={15} />
+        </span>
+        <span className="nav-label">Kanban</span>
+        {running > 0 && (
+          <span className="nav-meta">
+            <span className="nav-live" />
+            {running}
+          </span>
+        )}
+        {attention > 0 && <span className="nav-attention" title={`${attention} need${attention === 1 ? 's' : ''} attention`}>{attention}</span>}
+      </button>
+    </div>
+  )
+}
+
 function ConnectionPill() {
   const config = useStore(s => s.config)
   const statuses = useStore(s => s.statuses)
@@ -384,6 +443,7 @@ export function Sidebar() {
         </button>
       </div>
 
+      <KanbanLink />
       <SessionList />
       <ConnectionPill />
     </aside>

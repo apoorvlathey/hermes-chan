@@ -161,6 +161,34 @@ export class BotConnection {
     return body.dataUrl
   }
 
+  /** GET a path on the gateway's dashboard API (`/api/...`) as this bot's profile. */
+  apiGet<T>(apiPath: string, query: Record<string, string> = {}): Promise<T> {
+    return this.api<T>('GET', apiPath, query)
+  }
+
+  /** Call the gateway's dashboard API (`/api/...`) as this bot's profile. */
+  async api<T>(method: 'GET' | 'POST' | 'PATCH', apiPath: string, query: Record<string, string> = {}, json?: unknown): Promise<T> {
+    const ep = this.endpoint
+    if (!ep) throw new Error(`${this.bot.name ?? this.bot.id} isn't connected yet`)
+    const ticket = await mintHttpTicket(this.bot.transport, ep)
+    const q = new URLSearchParams(query)
+    const profile = this.bot.transport.profile
+    if (profile && profile !== 'default') q.set('profile', profile)
+    const qs = q.toString()
+    const res = await fetch(`${ep.apiOrigin}${apiPath}${qs ? `?${qs}` : ''}`, {
+      method,
+      headers: { 'X-Hermes-Gateway-Ticket': ticket, ...(json === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: json === undefined ? undefined : JSON.stringify(json),
+      signal: AbortSignal.timeout(20_000)
+    })
+    const body = (await res.json().catch(() => null)) as (T & { detail?: unknown }) | null
+    if (!res.ok || body === null) {
+      const detail = typeof body?.detail === 'string' ? body.detail : ''
+      throw new Error(detail || (res.status === 404 ? 'Not found' : `Request failed (${res.status})`))
+    }
+    return body
+  }
+
   respond(id: string, result: Record<string, unknown>) {
     const req = this.pending.get(id)
     if (!req) return
