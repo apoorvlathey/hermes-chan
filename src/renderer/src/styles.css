@@ -5363,3 +5363,25 @@ button.ghost {
 .chat-avatar-btn:hover {
   transform: scale(1.06);
 }
+
+/* Narrow windows: the board header's subtitle stays on one line and the tools give way first. */
+.kanban-head .chat-titles {
+  flex: 1;
+  min-width: 80px;
+}
+
+.kanban-head .chat-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-tools {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kanban-filter {
+  width: clamp(120px, 18vw, 190px);
+}

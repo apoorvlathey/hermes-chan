@@ -44,7 +44,15 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
   to open its session, even while Hermes keeps it out of the chat list.
 - **Kanban.** Hermes's task board, from the sidebar: what's queued, running, blocked or waiting for review,
   across every board on each machine your bots run on. Open a task to read its description, latest summary,
-  dependencies, comments and run history. Read-only; it uses the same Kanban API as the Hermes desktop app.
+  dependencies, comments and run history, and answer it: **Reply & unblock** a blocked task, or message a running
+  task's worker. Task updates in a chat show as a compact card that opens the task on the board.
+- **Bot settings.** Right-click a bot (or click its avatar in a chat) to edit its name, description and colour,
+  its `SOUL.md`, and which skills, toolsets and MCP servers it can use. Works for bots on other machines too.
+- **Slash commands.** Type `/` for the bot's commands and skills with descriptions, then their options
+  (`/reasoning ` → low, medium, high). Commands run through the gateway and show their output inline.
+- **Quote replies.** Reply to a specific message in Bot Chat; the quote travels with your message.
+- **Background work, readable.** When a subagent or a background process finishes, its result shows as a card
+  with the task and the outcome, instead of the raw notice Hermes hands the bot.
 - **Clean transcripts.** Your messages show what you typed, not the attached-context blobs the agent receives.
 
 <table>
@@ -61,6 +69,18 @@ Hermes you already run, on this Mac or on a server over SSH, and changes nothing
   </tr>
   <tr>
     <td colspan="2" align="center">Follow a bot's background workstreams from the panel on the right</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/kanban.png" alt="The Kanban board: columns for triage, to do, scheduled and ready, with a blocked task open in a panel showing its warning, comments, runs and a Reply & unblock box" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">Hermes's Kanban board, with a blocked task open and ready for your answer</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/bot-settings.png" alt="Bot settings open on the Soul tab: a SOUL.md editor for the Atlas bot" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">Right-click a bot to edit its soul, skills and tools</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/screenshots/new-chat-attachments.png" alt="Starting a new chat with a pasted chart image and a PDF attached" /></td>
