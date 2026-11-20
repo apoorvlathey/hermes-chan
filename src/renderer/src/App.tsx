@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import { BotSettings } from './BotSettings'
 import { Chat } from './Chat'
 import { Kanban } from './Kanban'
 import { Setup } from './Setup'
@@ -51,6 +52,7 @@ export function App() {
           <div className="boot">Waking the bots…</div>
         )}
       </main>
+      <BotSettings />
       {setupOpen && (
         <div className="setup-overlay">
           <Setup firstRun={false} />

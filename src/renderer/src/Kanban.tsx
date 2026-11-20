@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KanbanBoard, KanbanCard, KanbanTaskDetail } from '../../shared/types'
 import { hermes } from './bridge'
 import { Markdown } from './Chat'
-import { clearKanbanFocus, hostKey, kanbanHosts, loadKanbanBoards, openKanban, useStore } from './store'
+import { clearKanbanFocus, hostKey, kanbanHosts, loadKanbanBoards, openKanban, profileNamer, useStore } from './store'
 
 const POLL_MS = 15_000
 const DONE_SHOWN = 25
@@ -66,6 +66,7 @@ export function Kanban() {
   const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const focus = useStore(s => s.kanbanFocus)
+  const who = useStore(s => profileNamer(botId, s))
   const [refreshing, setRefreshing] = useState(false)
   const key = `${botId}/${slug ?? ''}`
   const live = useRef(key)
@@ -146,9 +147,9 @@ export function Kanban() {
     () =>
       (shown?.columns ?? []).map(c => ({
         status: c.status,
-        cards: q ? c.cards.filter(t => `${t.title} ${t.id} ${t.assignee} ${t.summary}`.toLowerCase().includes(q)) : c.cards
+        cards: q ? c.cards.filter(t => `${t.title} ${t.id} ${t.assignee} ${who(t.assignee)} ${t.summary}`.toLowerCase().includes(q)) : c.cards
       })),
-    [shown, q]
+    [shown, q, who]
   )
   // Who a task is for only tells you something when the board has more than one assignee.
   const showWho = new Set(cards.map(c => c.assignee)).size > 1
@@ -229,7 +230,7 @@ export function Kanban() {
           <div className="kanban-cols" onClick={e => e.target === e.currentTarget && setSelected(null)}>
             {columns.map(c =>
               c.cards.length ? (
-                <Column key={c.status} status={c.status} cards={c.cards} total={shown!.columns.find(x => x.status === c.status)!.cards.length} filtered={!!q} selected={selected} onSelect={setSelected} serverNow={shown!.now} showWho={showWho} />
+                <Column key={c.status} status={c.status} cards={c.cards} total={shown!.columns.find(x => x.status === c.status)!.cards.length} filtered={!!q} selected={selected} onSelect={setSelected} serverNow={shown!.now} who={showWho ? who : null} />
               ) : (
                 <div key={c.status} className="kb-rail" title={`${label(c.status)}: no tasks${q ? ' match' : ''}`}>
                   <StatusIcon status={c.status} />
@@ -246,6 +247,7 @@ export function Kanban() {
             board={slug}
             taskId={selected}
             card={cards.find(c => c.id === selected)}
+            who={who}
             version={data?.at ?? 0}
             onSelect={setSelected}
             onClose={() => setSelected(null)}
@@ -280,8 +282,8 @@ function Select({ value, onChange, options, title }: { value: string; onChange: 
   )
 }
 
-function Column(props: { status: string; cards: KanbanCard[]; total: number; filtered: boolean; selected: string | null; onSelect: (id: string) => void; serverNow: number; showWho: boolean }) {
-  const { status, cards, total, filtered, selected, onSelect, serverNow, showWho } = props
+function Column(props: { status: string; cards: KanbanCard[]; total: number; filtered: boolean; selected: string | null; onSelect: (id: string) => void; serverNow: number; who: ((profile: string) => string) | null }) {
+  const { status, cards, total, filtered, selected, onSelect, serverNow, who } = props
   const [all, setAll] = useState(false)
   const capped = status === 'done' && !all && cards.length > DONE_SHOWN
   const list = capped ? cards.slice(0, DONE_SHOWN) : cards
@@ -296,7 +298,7 @@ function Column(props: { status: string; cards: KanbanCard[]; total: number; fil
       </h3>
       <div className="kb-cards">
         {list.map(c => (
-          <Card key={c.id} card={c} selected={selected === c.id} onSelect={onSelect} skew={skew} showWho={showWho} />
+          <Card key={c.id} card={c} selected={selected === c.id} onSelect={onSelect} skew={skew} who={who} />
         ))}
         {capped && (
           <button className="kb-more" onClick={() => setAll(true)}>
@@ -308,7 +310,7 @@ function Column(props: { status: string; cards: KanbanCard[]; total: number; fil
   )
 }
 
-function Card({ card: c, selected, onSelect, skew, showWho }: { card: KanbanCard; selected: boolean; onSelect: (id: string) => void; skew: number; showWho: boolean }) {
+function Card({ card: c, selected, onSelect, skew, who }: { card: KanbanCard; selected: boolean; onSelect: (id: string) => void; skew: number; who: ((profile: string) => string) | null }) {
   const t = now() - skew
   const age =
     c.status === 'done' && c.completedAt
@@ -330,7 +332,7 @@ function Card({ card: c, selected, onSelect, skew, showWho }: { card: KanbanCard
       {note && <span className={`kb-note ${c.status === 'blocked' ? 'bad' : ''}`}>{note}</span>}
       {c.summary && (c.status === 'done' || c.status === 'review') && <span className="kb-summary">{c.summary}</span>}
       <span className="kb-meta">
-        {showWho && <span className="kb-who">{c.assignee || 'Unassigned'}</span>}
+        {who && <span className="kb-who">{c.assignee ? who(c.assignee) : 'Unassigned'}</span>}
         {age && <span>{age}</span>}
         <span className="kb-icons">
           {c.warnings && (
@@ -356,6 +358,8 @@ function TaskPanel(props: {
   board: string
   taskId: string
   card?: KanbanCard
+  /** Profile → bot name. */
+  who: (profile: string) => string
   version: number
   known: Set<string>
   onSelect: (id: string) => void
@@ -363,7 +367,7 @@ function TaskPanel(props: {
   /** The task changed here (a reply, an unblock): refresh the board. */
   onChanged: () => void
 }) {
-  const { botId, board, taskId, card, version, known, onSelect, onClose, onChanged } = props
+  const { botId, board, taskId, card, who, version, known, onSelect, onClose, onChanged } = props
   const [detail, setDetail] = useState<KanbanTaskDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [mine, setMine] = useState(0)
@@ -402,8 +406,8 @@ function TaskPanel(props: {
         {c && (
           <div className="kb-facts">
             <span className="kb-id">{c.id}</span>
-            <span>{c.assignee || 'Unassigned'}</span>
-            {c.createdAt > 0 && <span>Created {span(t - c.createdAt)} ago{detail?.createdBy ? ` by ${detail.createdBy}` : ''}</span>}
+            <span>{c.assignee ? who(c.assignee) : 'Unassigned'}</span>
+            {c.createdAt > 0 && <span>Created {span(t - c.createdAt)} ago{detail?.createdBy ? ` by ${who(detail.createdBy)}` : ''}</span>}
             {status === 'done' && c.completedAt > 0 && <span>Done {span(t - c.completedAt)} ago</span>}
             {status === 'running' && c.runStartedAt > 0 && <span>Running for {span(t - c.runStartedAt)}</span>}
             {c.priority !== 0 && <span>Priority {c.priority}</span>}
@@ -454,7 +458,7 @@ function TaskPanel(props: {
               <Section title={`Comments · ${detail.comments.length}`}>
                 <ol className="kb-comments">
                   {detail.comments.map((m, i) => (
-                    <Comment key={i} author={m.author} ago={m.at > 0 ? `${span(t - m.at)} ago` : ''} body={m.body} botId={botId} />
+                    <Comment key={i} author={m.author === 'user' ? 'user' : who(m.author)} ago={m.at > 0 ? `${span(t - m.at)} ago` : ''} body={m.body} botId={botId} />
                   ))}
                 </ol>
               </Section>
@@ -473,7 +477,7 @@ function TaskPanel(props: {
                         <div className="kb-run-head">
                           <span className="kb-run-dot" aria-hidden />
                           <span className={`kb-run-outcome ${bad ? 'bad' : ''}`}>{outcome.replace(/_/g, ' ')}</span>
-                          {r.profile && <span>{r.profile}</span>}
+                          {r.profile && <span>{who(r.profile)}</span>}
                           {ended > 0 && r.startedAt > 0 && <span>{span(ended - r.startedAt)}</span>}
                           {r.startedAt > 0 && <span className="kb-run-when">{span(t - r.startedAt)} ago</span>}
                         </div>

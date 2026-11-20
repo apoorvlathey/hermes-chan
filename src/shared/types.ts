@@ -126,6 +126,14 @@ export interface KanbanTaskDetail {
   diagnostics: { severity: string; title: string; detail: string }[]
 }
 
+/** One row of a native context menu. */
+export interface ContextMenuItem {
+  id?: string
+  label?: string
+  enabled?: boolean
+  separator?: boolean
+}
+
 export interface ReplyNotice {
   botId: string
   sessionId: string
@@ -177,5 +185,7 @@ export interface HermesBridge {
   onOpenChat(cb: (target: { botId: string; sessionId: string }) => void): () => void
   statuses(): Promise<BotStatus[]>
   openExternal(url: string): void
+  /** Show a native context menu at the pointer; the picked item's id, or null. */
+  contextMenu(items: ContextMenuItem[]): Promise<string | null>
   configPath(): Promise<string>
 }

@@ -160,7 +160,13 @@ interface State {
   kanbanBoards: Record<string, KanbanBoardInfo[]>
   /** A task to open when the board next shows (from a Kanban update in a chat). */
   kanbanFocus: { board: string; taskId: string } | null
+  /** The bot settings sheet, when open: which bot and which section. */
+  botSettings: { botId: string; tab: BotSettingsTab } | null
+  /** Every Hermes profile's display name, per host: names Kanban assignees that aren't our bots. */
+  profileTitles: Record<string, Record<string, string>>
 }
+
+export type BotSettingsTab = 'profile' | 'soul' | 'skills' | 'tools'
 
 // ─── store core ─────────────────────────────────────────────────────────────────────────────────
 
@@ -198,7 +204,9 @@ let state: State = {
   workstreams: {},
   showWorkstreams: prefs.showWorkstreams ?? true,
   kanbanBoards: {},
-  kanbanFocus: null
+  kanbanFocus: null,
+  botSettings: null,
+  profileTitles: {}
 }
 
 const listeners = new Set<() => void>()
@@ -383,7 +391,8 @@ async function refreshBot(botId: string) {
     const canon = p?.canonical_session
     const bot: Bot = {
       id: botId,
-      name: p?.display_name || meta.title || cfg.name || profile,
+      // The bot's title (what Hermes's desktop app shows and our settings edit) wins over the CLI label.
+      name: meta.title || p?.display_name || cfg.name || profile,
       color: meta.color || cfg.color || 'hsl(45 90% 60%)',
       description: meta.description || p?.description,
       model: p?.model,
@@ -421,9 +430,13 @@ async function refreshBot(botId: string) {
     rows.forEach(r => prime(r.key, r.lastActive))
     if (bot.canonical) prime(threadKey(botId, bot.canonical.id), bot.canonical.lastActive)
 
+    const titles = Object.fromEntries(
+      profiles.profiles.map(x => [String(x.name), String(x.ui_meta?.['hermes-bots']?.title || x.display_name || x.name)])
+    )
     set(s => ({
       bots: { ...s.bots, [botId]: bot },
       sessions: { ...s.sessions, [botId]: rows },
+      profileTitles: { ...s.profileTitles, [hostKey(botId, s)]: titles },
       ...(seenChanged ? { seen } : {})
     }))
 
@@ -1360,6 +1373,21 @@ export function kanbanHosts(s: State = state): { key: string; label: string; bot
   return [...hosts.values()]
 }
 
+/** Hermes names things by profile (`default`, `research`); this turns a profile on `botId`'s host into
+ *  the name of the bot that runs it, else the profile's own display name in Hermes, else the profile. */
+export function profileNamer(botId: string, s: State = state): (profile: string) => string {
+  const host = hostKey(botId, s)
+  const names = new Map<string, string>()
+  for (const b of s.config?.bots ?? []) {
+    if (hostKey(b.id, s) === host) names.set(b.transport.profile, s.bots[b.id]?.name ?? b.name ?? b.transport.profile)
+  }
+  const titles = s.profileTitles[host] ?? {}
+  return profile => {
+    const p = profile.replace(/^@/, '')
+    return names.get(p) ?? titles[p] ?? p
+  }
+}
+
 /** Open the Kanban board, on the host of the bot in view unless another bot is given, optionally with
  *  one task open. */
 export function openKanban(botId?: string, focus?: { board: string; taskId: string }) {
@@ -1368,6 +1396,9 @@ export function openKanban(botId?: string, focus?: { board: string; taskId: stri
   const host = kanbanHosts().find(h => h.key === hostKey(id))
   set({ view: { kind: 'kanban', botId: host?.botId ?? id }, kanbanFocus: focus ?? null })
 }
+
+export const openBotSettings = (botId: string, tab: BotSettingsTab = 'profile') => set({ botSettings: { botId, tab } })
+export const closeBotSettings = () => set({ botSettings: null })
 
 export const clearKanbanFocus = () => state.kanbanFocus && set({ kanbanFocus: null })
 

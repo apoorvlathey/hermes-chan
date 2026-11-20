@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Avatar } from './Avatar'
+import { hermes } from './bridge'
 import { BoardIcon } from './Kanban'
 import {
   botBusy,
@@ -18,6 +19,7 @@ import {
   newChat,
   openSetup,
   openBot,
+  openBotSettings,
   openSession,
   pinnedSessions,
   reconnectBot,
@@ -111,7 +113,11 @@ function BotsRow() {
             onDragEnd={endDrag}
             className={`bot-tile ${active ? 'active' : ''} ${busy[cfg.id] ? 'busy' : ''} ${st !== 'ready' ? 'offline' : ''} ${dragId === cfg.id ? 'dragging' : ''}`}
             onClick={() => openBot(cfg.id)}
-            title={`${bot.name}${bot.description ? ` — ${bot.description}` : ''}  ⌘${i + 1} · drag to reorder`}
+            onContextMenu={e => {
+              e.preventDefault()
+              void botMenu(cfg.id, st === 'ready')
+            }}
+            title={`${bot.name}${bot.description ? ` — ${bot.description}` : ''}  ⌘${i + 1} · right-click for settings · drag to reorder`}
             style={{ ['--bot' as string]: bot.color }}
           >
             <span className="bot-avatar-wrap">
@@ -137,6 +143,26 @@ function BotsRow() {
       </button>
     </div>
   )
+}
+
+/** A bot tile's right-click menu (native). */
+async function botMenu(botId: string, online: boolean) {
+  const picked = await hermes.contextMenu([
+    { id: 'chat', label: 'Open Bot Chat' },
+    { id: 'new', label: 'New Chat' },
+    { separator: true },
+    { id: 'soul', label: 'Edit Soul…', enabled: online },
+    { id: 'settings', label: 'Bot Settings…', enabled: online },
+    { separator: true },
+    { id: 'reconnect', label: 'Reconnect' },
+    { id: 'manage', label: 'Add or Remove Bots…' }
+  ])
+  if (picked === 'chat') openBot(botId)
+  else if (picked === 'new') newChat(botId)
+  else if (picked === 'soul') openBotSettings(botId, 'soul')
+  else if (picked === 'settings') openBotSettings(botId, 'profile')
+  else if (picked === 'reconnect') void reconnectBot(botId)
+  else if (picked === 'manage') openSetup()
 }
 
 const DRAG_TYPE = 'application/x-hermeschan-session'

@@ -23,7 +23,9 @@ import {
   type Item,
   type Prompt,
   type ToolInfo,
-  openKanban
+  openKanban,
+  openBotSettings,
+  profileNamer
 } from './store'
 import { BotDayDivider, BotTime, localDay } from './botChat'
 import { CodeBlock } from './CodeBlock'
@@ -539,6 +541,7 @@ function KanbanUpdatesCard({ item, bot }: { item: Extract<Item, { kind: 'kanban'
 
 function KanbanUpdateRow({ u, title, botId }: { u: KanbanUpdate; title?: string; botId: string }) {
   const [open, setOpen] = useState(false)
+  const who = useStore(s => profileNamer(botId, s))
   const bad = u.event === 'crashed' || u.event === 'gave_up' || u.event === 'blocked'
   return (
     <li className="kbu-row">
@@ -549,7 +552,7 @@ function KanbanUpdateRow({ u, title, botId }: { u: KanbanUpdate; title?: string;
         </button>
         <div className={`kbu-event ${bad ? 'bad' : ''}`}>
           {u.label}
-          {u.assignee && u.assignee !== 'default' && <span className="kbu-who"> · {u.assignee}</span>}
+          {u.assignee && <span className="kbu-who"> · {who(u.assignee)}</span>}
         </div>
         {u.detail && (
           <button className={`kbu-detail ${open ? 'open' : ''}`} onClick={() => setOpen(o => !o)} title={open ? 'Show less' : 'Show more'}>
@@ -1177,7 +1180,9 @@ export function Chat() {
       )}
       <header className="chat-head">
         <BackToBotChat />
-        <Avatar bot={bot} size={28} />
+        <button className="chat-avatar-btn" onClick={() => openBotSettings(bot.id)} title={`${bot.name} settings`} aria-label={`${bot.name} settings`}>
+          <Avatar bot={bot} size={28} />
+        </button>
         <div className="chat-titles">
           <div className="chat-title">{title}</div>
           <div className="chat-sub">{subtitle}</div>

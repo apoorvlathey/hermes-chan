@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { app, BrowserWindow, ipcMain, nativeTheme, Notification, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, Notification, powerMonitor, shell } from 'electron'
 
-import type { AppConfig, BotConfig, BotStatus, GatewayEventEnvelope, ReplyNotice, ServerRequestEnvelope } from '../shared/types'
+import type { AppConfig, BotConfig, BotStatus, ContextMenuItem, GatewayEventEnvelope, ReplyNotice, ServerRequestEnvelope } from '../shared/types'
 import { BotConnection, friendlyError } from './bots'
 import { CONFIG_PATH, loadConfig, saveConfig } from './config'
 import { kanbanBoard, kanbanBoards, kanbanReply, kanbanTask } from './kanban'
@@ -73,6 +73,22 @@ function startBots() {
   }
 }
 
+/** A native context menu at the pointer; resolves with the picked item's id, or null if dismissed. */
+ipcMain.handle('app:context-menu', (e, items: ContextMenuItem[]) =>
+  new Promise<string | null>(resolve => {
+    let picked: string | null = null
+    const menu = Menu.buildFromTemplate(
+      (Array.isArray(items) ? items : []).map(i =>
+        i.separator
+          ? { type: 'separator' as const }
+          : { label: String(i.label ?? ''), enabled: i.enabled !== false, click: () => (picked = String(i.id ?? '')) }
+      )
+    )
+    const owner = BrowserWindow.fromWebContents(e.sender) ?? undefined
+    // `callback` runs after the menu closes, and after the click handler when an item was picked.
+    menu.popup({ window: owner, callback: () => setTimeout(() => resolve(picked), 0) })
+  })
+)
 ipcMain.handle('hermes:config', () => config)
 ipcMain.handle('setup:scan-local', () => scanLocal())
 ipcMain.handle('setup:scan-remote', (_e, host: string) => scanRemote(String(host).trim()))

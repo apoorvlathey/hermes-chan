@@ -52,7 +52,8 @@ const bridge: HermesBridge = {
   onStatus: listen('hermes:status'),
   notify: n => ipcRenderer.send('hermes:notify', n),
   onOpenChat: listen('hermes:open-chat'),
-  openExternal: url => ipcRenderer.send('hermes:open-external', url)
+  openExternal: url => ipcRenderer.send('hermes:open-external', url),
+  contextMenu: items => ipcRenderer.invoke('app:context-menu', items)
 }
 
 contextBridge.exposeInMainWorld('hermes', bridge)

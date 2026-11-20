@@ -53,6 +53,37 @@ const WORKSTREAMS: Partial<Record<string, Workstream[]>> = {
 }
 WORKSTREAMS.atlas![5]!.error = 'The accountant folder is read-only'
 
+// ─── profiles (the bot settings sheet) ──────────────────────────────────────────────────────────
+
+const DEMO_SKILLS = ['calendar-triage', 'daily-brief', 'flight-search', 'inbox-zero', 'meeting-notes', 'receipt-filing', 'recipe-scaler', 'travel-planner', 'weekly-review']
+const DEMO_TOOLSETS: [string, string, string, number][] = [
+  ['web', 'Web', 'Search the web and read pages', 3],
+  ['files', 'Files', 'Read and edit files in the workspace', 6],
+  ['terminal', 'Terminal', 'Run shell commands', 2],
+  ['browser', 'Browser', 'Drive a headless browser', 9],
+  ['kanban', 'Kanban', 'Create and work through board tasks', 7],
+  ['messaging', 'Messaging', 'Send email and chat messages for you', 4]
+]
+const SOULS: Record<string, string> = {
+  atlas: "# Atlas\n\nYou are Atlas, a calm and precise chief of staff.\n\n## How you work\n\n- Lead with the answer, then the detail.\n- Hold, don't pay: confirm before spending money or sending anything on my behalf.\n- Keep my calendar realistic: no more than three meetings before lunch.\n\n## Tone\n\nWarm, brief, never chirpy.\n",
+  pixel: '# Pixel\n\nYou are Pixel, a design and copy partner. Offer two or three directions, not ten. Show, then explain.\n',
+  sage: '# Sage\n\nYou are Sage, a careful researcher. Cite sources, say how sure you are, and flag anything you could not verify.\n'
+}
+const profiles: Record<string, { title: string; description: string; color: string; soul: string; disabledSkills: string[]; toolsets: string[]; mcp: boolean; revision: number }> = {}
+function demoProfile(id: string) {
+  const b = BOTS.find(x => x.id === id) ?? BOTS[0]
+  return (profiles[id] ??= {
+    title: b.name,
+    description: b.description,
+    color: b.color,
+    soul: SOULS[b.id] ?? '',
+    disabledSkills: id === 'atlas' ? ['recipe-scaler'] : [],
+    toolsets: ['web', 'files', 'kanban', 'messaging', ...(id === 'sage' ? ['browser'] : [])],
+    mcp: id === 'atlas',
+    revision: 1
+  })
+}
+
 // ─── chats ─────────────────────────────────────────────────────────────────────────────────────
 
 interface Row {
@@ -199,13 +230,13 @@ const TRANSCRIPTS: Record<string, unknown[]> = {
     bot('Shortlist is in. **Casa do Largo** (€104/night) fits best: courtyard rooms, quiet. Want me to hold it?', at(0, 9, 16)),
     // Hermes's Kanban notifier: a batch of task changes, then a single notice handed to the bot.
     user(
-      '✔ [default] @atlas Kanban t_7a20c3d2 done — Compare fares for the 14th\nCheapest sensible option: TP 1351 at 07:40, €212 return with a carry-on. Two others within €20.\n✖ [default] @atlas Kanban t_5e8a1b42 worker crashed (pid gone); dispatcher will retry\n⏸ [default] @atlas Kanban t_5e8a1b42 blocked: The accountant folder is shared view-only, so the receipts can’t be written there. Needs edit access or a different folder.\n✔ [default] @pixel Kanban t_0b5f3a17 done — Three logo directions for the newsletter\nWordmark, monogram and a small owl mark, each in light and dark.',
+      '✔ [default] @default Kanban t_7a20c3d2 done — Compare fares for the 14th\nCheapest sensible option: TP 1351 at 07:40, €212 return with a carry-on. Two others within €20.\n✖ [default] @default Kanban t_5e8a1b42 worker crashed (pid gone); dispatcher will retry\n⏸ [default] @default Kanban t_5e8a1b42 blocked: The accountant folder is shared view-only, so the receipts can’t be written there. Needs edit access or a different folder.\n✔ [default] @pixel Kanban t_0b5f3a17 done — Three logo directions for the newsletter\nWordmark, monogram and a small owl mark, each in light and dark.',
       at(0, 9, 40)
     ),
     {
       role: 'user',
       display_kind: 'internal_notification',
-      text: '[kanban] Task t_6c2e4f96 completed.\nTitle: Fix the flaky integration tests on the api repo\nAssignee: @atlas\nBoard: default\n\nCheck the result or decide the next step.\nResult: Two tests shared a temp directory. Each now gets its own; 50 runs in a row pass.\n\nThis is an automatic task-status notification, not a request to decompose the task again. Inspect the current board before creating follow-up tasks; do not recreate tasks or graphs that already exist.',
+      text: '[kanban] Task t_6c2e4f96 completed.\nTitle: Fix the flaky integration tests on the api repo\nAssignee: @default\nBoard: default\n\nCheck the result or decide the next step.\nResult: Two tests shared a temp directory. Each now gets its own; 50 runs in a row pass.\n\nThis is an automatic task-status notification, not a request to decompose the task again. Inspect the current board before creating follow-up tasks; do not recreate tasks or graphs that already exist.',
       timestamp: at(0, 9, 52)
     },
     bot('The api tests are fixed and the logo directions are in. One thing needs you: the receipts export is blocked on the accountant folder being view-only.', at(0, 9, 53))
@@ -403,7 +434,8 @@ export function demoBridge(real: HermesBridge): HermesBridge {
     const id = botId as BotId
     const b = BOTS.find(x => x.id === id)!
     switch (method) {
-      case 'profiles.list':
+      case 'profiles.list': {
+        const pr = demoProfile(id)
         return {
           profiles: [
             {
@@ -411,13 +443,45 @@ export function demoBridge(real: HermesBridge): HermesBridge {
               is_default: true,
               display_name: b.name,
               model: b.model,
-              description: b.description,
+              description: pr.description,
               has_avatar: true,
-              ui_meta: { 'hermes-bots': { color: b.color, title: b.name, description: b.description } },
+              ui_meta: { 'hermes-bots': { color: pr.color, title: pr.title, description: pr.description } },
+              ui_meta_revisions: { 'hermes-bots': pr.revision },
               canonical_session: { id: BOT_CHAT(id), resolved_id: BOT_CHAT(id), title: 'Bot Chat', last_active: lastActive(id) }
             }
           ]
         }
+      }
+      case 'profiles.describe': {
+        const pr = demoProfile(id)
+        return {
+          name: 'default',
+          description: pr.description,
+          soul: pr.soul,
+          model: { provider: 'anthropic', default: b.model },
+          skills: DEMO_SKILLS.map(name => ({ name, enabled: !pr.disabledSkills.includes(name) })),
+          toolsets: DEMO_TOOLSETS.map(([name, label, description, n]) => ({ name, label, description, tool_count: n, enabled: pr.toolsets.includes(name) })),
+          toolsets_pinned: true,
+          mcp_servers: [{ name: 'calendar', transport: 'http', enabled: pr.mcp }]
+        }
+      }
+      case 'profiles.configure': {
+        const pr = demoProfile(id)
+        const applied: Record<string, unknown> = {}
+        const meta = (params.ui_meta as any)?.['hermes-bots']
+        if (meta) {
+          Object.assign(pr, { title: meta.title ?? pr.title, color: meta.color ?? pr.color, description: meta.description ?? pr.description })
+          pr.revision += 1
+          applied.ui_meta = true
+        }
+        if (typeof params.description === 'string') (pr.description = params.description), (applied.description = true)
+        if (typeof params.soul === 'string') (pr.soul = params.soul), (applied.soul = true)
+        if (Array.isArray(params.disabled_skills)) (pr.disabledSkills = params.disabled_skills as string[]), (applied.skills = true)
+        if (Array.isArray(params.enabled_toolsets)) (pr.toolsets = params.enabled_toolsets as string[]), (applied.toolsets = true)
+        if (Array.isArray(params.enabled_mcp_servers)) (pr.mcp = (params.enabled_mcp_servers as string[]).includes('calendar')), (applied.mcp_servers = true)
+        await new Promise(r => setTimeout(r, 300))
+        return { ok: true, applied }
+      }
       case 'profiles.get_asset':
         return { data: avatar(b.color, b.emoji) }
       case 'session.list':
@@ -479,7 +543,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
         id: b.id,
         name: b.name,
         color: b.color,
-        transport: b.id === 'sage' ? { kind: 'ssh' as const, host: 'home-server', profile: 'research' } : { kind: 'local' as const, profile: 'default' }
+        transport: b.id === 'sage' ? { kind: 'ssh' as const, host: 'home-server', profile: 'research' } : { kind: 'local' as const, profile: b.id === 'atlas' ? 'default' : b.id }
       })),
       hiddenSources: ['cron', 'tool', 'kanban', 'subagent']
     }),
