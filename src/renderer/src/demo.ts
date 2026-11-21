@@ -551,6 +551,7 @@ export function demoBridge(real: HermesBridge): HermesBridge {
         const m = modelFor(id, String(params.session_id))
         if (params.operation === 'model') m.model = params.payload.model
         if (params.operation === 'reasoning') m.effort = params.payload.effort
+        if (params.operation === 'rename' && !String(params.payload?.title ?? '').trim()) throw new Error('title required')
         return { session_id: params.session_id, operation: params.operation, revision: 2 }
       }
       case 'model.options':

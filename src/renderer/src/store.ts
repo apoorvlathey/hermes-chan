@@ -1208,6 +1208,23 @@ export async function setPinned(row: SessionRow, pinned: boolean, at?: number) {
   }
 }
 
+/** Rename a chat. Hermes stores the title on the session, so it syncs to its other clients. */
+export async function renameSession(row: SessionRow, title: string) {
+  const next = title.replace(/\s+/g, ' ').trim()
+  if (!next || next === row.title) return
+  const before = row.title
+  patchRow(row.key, { title: next })
+  if (state.threads[row.key]) patchThread(row.key, () => ({ title: next }))
+  try {
+    await fencedMutate(row.botId, row.resumeId, 'rename', { title: next })
+  } catch (err) {
+    patchRow(row.key, { title: before })
+    if (state.threads[row.key]) patchThread(row.key, () => ({ title: before }))
+    console.warn('rename failed', err)
+    throw err
+  }
+}
+
 /** Move a pinned chat to `index` within the pinned list (drag to reorder). */
 export function movePinned(key: string, index: number) {
   const current = pinnedSessions().map(r => r.key)

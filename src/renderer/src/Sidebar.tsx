@@ -16,6 +16,7 @@ import {
   unreadSessions,
   isUnread,
   movePinned,
+  renameSession,
   newChat,
   openSetup,
   openBot,
@@ -179,14 +180,56 @@ function SessionItem({ row, drag }: { row: SessionRow; drag: DragProps }) {
   const unread = useStore(s => isUnread(row.key, row.lastActive, s))
   const running = useStore(s => s.threads[row.key]?.running ?? row.running)
   const title = row.title || row.preview || 'Untitled chat'
+  const [editing, setEditing] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const menu = async () => {
+    const picked = await hermes.contextMenu([
+      { id: 'open', label: 'Open' },
+      { id: 'rename', label: 'Rename…' },
+      { id: 'pin', label: row.pinned ? 'Unpin' : 'Pin' }
+    ])
+    if (picked === 'open') openSession(row)
+    else if (picked === 'rename') setEditing(true)
+    else if (picked === 'pin') void setPinned(row, !row.pinned)
+  }
+
+  if (editing) {
+    return (
+      <div className={`session editing ${active ? 'active' : ''} ${failed ? 'failed' : ''}`}>
+        <span className="session-dot" style={{ background: bot?.color }} />
+        <RenameField
+          initial={row.title || ''}
+          placeholder={title}
+          onDone={next => {
+            setEditing(false)
+            if (next === null) return
+            setFailed(false)
+            renameSession(row, next).catch(() => {
+              setFailed(true)
+              setTimeout(() => setFailed(false), 2500)
+            })
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
       draggable
-      className={`session ${active ? 'active' : ''} ${unread ? 'unread' : ''} ${row.pinned ? 'pinned' : ''} ${drag.draggingKey === row.key ? 'dragging' : ''}`}
+      className={`session ${active ? 'active' : ''} ${unread ? 'unread' : ''} ${row.pinned ? 'pinned' : ''} ${drag.draggingKey === row.key ? 'dragging' : ''} ${failed ? 'failed' : ''}`}
       onClick={() => openSession(row)}
-      onKeyDown={e => e.key === 'Enter' && openSession(row)}
+      onContextMenu={e => {
+        e.preventDefault()
+        void menu()
+      }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') openSession(row)
+        else if (e.key === 'F2') setEditing(true)
+      }}
       onDragStart={e => {
         e.dataTransfer.setData(DRAG_TYPE, row.key)
         e.dataTransfer.effectAllowed = 'move'
@@ -211,6 +254,38 @@ function SessionItem({ row, drag }: { row: SessionRow; drag: DragProps }) {
         📌
       </button>
     </div>
+  )
+}
+
+/** The title as a text field: ↵ saves, Esc or an empty name cancels, clicking away saves. */
+function RenameField({ initial, placeholder, onDone }: { initial: string; placeholder: string; onDone: (title: string | null) => void }) {
+  const ref = useRef<HTMLInputElement>(null)
+  const done = useRef(false)
+  const finish = (value: string | null) => {
+    if (done.current) return
+    done.current = true
+    onDone(value && value.trim() ? value : null)
+  }
+  useLayoutEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
+  return (
+    <input
+      ref={ref}
+      className="session-rename"
+      defaultValue={initial}
+      placeholder={placeholder}
+      aria-label="Chat name"
+      maxLength={200}
+      spellCheck={false}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Enter') finish(e.currentTarget.value)
+        else if (e.key === 'Escape') finish(null)
+      }}
+      onBlur={e => finish(e.currentTarget.value)}
+    />
   )
 }
 
