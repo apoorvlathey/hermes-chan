@@ -17,7 +17,8 @@
     "package": "electron-vite build && electron-builder --mac --dir",
     "release:build": "electron-vite build && electron-builder --mac --arm64 -c.mac.identity=- --publish never",
     "install-app": "bash scripts/install-app.sh",
-    "demo": "electron-vite build && HERMESCHAN_DEMO=1 electron ."
+    "demo": "electron-vite build && HERMESCHAN_DEMO=1 electron .",
+    "build:site": "bash scripts/build-site.sh"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

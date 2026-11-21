@@ -6,3 +6,6 @@ dist/
 !build/icon.png
 !docs/screenshots/*.png
 !src/renderer/public/icon.png
+!site/assets/*.png
+dist-site/
+*.car
