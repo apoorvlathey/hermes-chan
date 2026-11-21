@@ -6,7 +6,7 @@ import type { AppConfig, BotStatus, GatewayEventEnvelope, KanbanBoardInfo, Serve
 import { hermes } from './bridge'
 import { applyFastAfterCreate, applyInfo, createParamsFor, fencedMutate, knownGeneration, loadSessionModel, type ModelPick, noteFence } from './models'
 import { CLIENT_COMMANDS, forgetCatalog, loadCatalog, parseSlash } from './slash'
-import { backgroundDone, type BackgroundDone, kanbanUpdates, type KanbanUpdate, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
+import { backgroundDone, type BackgroundDone, isSilentReply, kanbanUpdates, type KanbanUpdate, cronOutput, cronReport, handoff, splitReply, withReply, type ReplyQuote, humanJobName, typedAsk, unwrapSteer, userDisplay } from './transcript'
 
 
 // ─── types ──────────────────────────────────────────────────────────────────────────────────────
@@ -532,7 +532,8 @@ function mapMessages(messages: any[]): Item[] {
         const shown = userDisplay(unwrapSteer(raw))
         if (shown?.text || shown?.images.length) out.push(userItem(shown, ts))
       } else if (m.display_kind && m.display_kind !== 'user') {
-        out.push({ kind: 'note', id: nid(), text: raw, ts })
+        const text = raw.replace(/^\[INTERNAL NOTIFICATION[^\]]*\]\s*$/gm, '').trim()
+        if (text) out.push({ kind: 'note', id: nid(), text, ts })
       } else {
         const shown = userDisplay(typedAsk(m) ?? raw)
         if (shown && (shown.text || shown.images.length)) {
@@ -541,7 +542,7 @@ function mapMessages(messages: any[]): Item[] {
       }
     } else if (m.role === 'assistant') {
       const text = textOf(m)
-      if (text.trim()) out.push({ kind: 'assistant', id: nid(), text, ts })
+      if (text.trim() && !isSilentReply(text)) out.push({ kind: 'assistant', id: nid(), text, ts })
     } else if (m.role === 'tool') {
       out.push({ kind: 'tool', id: nid(), tool: toolFromLabels(m), ts })
     } else if (m.display_kind) {
@@ -987,6 +988,7 @@ function plainText(md: string): string {
 function notifyReply(botId: string, sid: string, payload: Record<string, any>, key?: string) {
   if (state.windowFocused) return
   if (payload.status === 'interrupted' || payload.status === 'cancelled') return
+  if (typeof payload.text === 'string' && isSilentReply(payload.text)) return
   const bot = state.bots[botId]
   if (!bot) return
   const canonical = !!bot.canonical && (bot.canonical.id === sid || bot.canonical.resumeId === sid)
@@ -1141,7 +1143,9 @@ function onEvent({ botId, event }: GatewayEventEnvelope) {
           const already = tail.some(i => i.kind === 'assistant' && i.text === finalText)
           if (!already) items = [...items, { kind: 'assistant', id: nid(), text: finalText, ts: Date.now() / 1000 }]
         }
-        items = closeStreaming(items).map(i => (i.kind === 'tool' && !i.tool.done ? { ...i, tool: { ...i.tool, done: true } } : i))
+        items = closeStreaming(items)
+          .filter(i => !(i.kind === 'assistant' && isSilentReply(i.text)))
+          .map(i => (i.kind === 'tool' && !i.tool.done ? { ...i, tool: { ...i.tool, done: true } } : i))
         const err = payload.error || (payload.status === 'error' ? payload.failure_reason : null)
         if (err) items = [...items, { kind: 'note', id: nid(), tone: 'error', text: String(err) }]
         return { items, running: false, thinking: false, status: undefined }

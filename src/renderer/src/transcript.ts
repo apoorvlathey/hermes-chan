@@ -239,7 +239,8 @@ export function backgroundDone(m: { role: string; display_kind?: string | null; 
   const kind = m.display_kind
   const isDeleg = kind === 'async_delegation_complete' || (!kind && DELEG_HEAD_RE.test(raw))
   const isProc = kind === 'process_complete' || (!kind && PROCESS_HEAD_RE.test(raw) && raw.includes('exit code'))
-  if (m.role !== 'user' || (!isDeleg && !isProc)) return null
+  if (m.role !== 'user') return null
+  if (!isDeleg && !isProc) return processSignal(raw)
   const title = String(parseMetadata(m.display_metadata)?.display_text ?? '').trim()
   const cut = title.indexOf(': ')
   const head = cut > 0 ? title.slice(0, cut) : title
@@ -293,6 +294,41 @@ export function backgroundDone(m: { role: string; display_kind?: string | null; 
     body: tidyResult(body || raw.replace(DELEG_HEAD_RE, '').replace(/^\s*[^\n]+\n/, '')),
     failed: failedRun || /failed|interrupted|timed out|cancelled|stalled|issues|incomplete|unknown/i.test(head)
   }
+}
+
+const WATCH_RE = /^\[IMPORTANT: Background process (\S+) matched watch pattern "((?:[^"\\]|\\.)*)"\.?\n/
+const HEARTBEAT_RE = /^\[Background process (\S+) heartbeat #(\d+) — still running after ([^(\n]+?) \(/
+const INTERNAL_TRAILER_RE = /^\[INTERNAL NOTIFICATION[^\]]*\]\s*$/gm
+
+/** A process that's still running told the bot something: a watch pattern matched its output, or a
+ *  heartbeat. Hermes stores these as `internal_notification` user rows wrapped in `[...]`. */
+function processSignal(raw: string): BackgroundDone | null {
+  const text = raw.replace(INTERNAL_TRAILER_RE, '').trim()
+  const watch = WATCH_RE.exec(text)
+  const beat = watch ? null : HEARTBEAT_RE.exec(text)
+  if (!watch && !beat) return null
+  const id = (watch ?? beat)![1]
+  const rest = text
+    .slice((watch ?? beat)![0].length)
+    .replace(/^[^\n]*\n/, beat ? '' : '$&') // a heartbeat's head runs on to the end of its line
+    .replace(/\]\s*$/, '')
+    .trim()
+  const what = watch ? `matched “${watch[2]}”` : `still running after ${beat![3]}`
+  return {
+    variant: 'process',
+    label: watch ? 'Background process output matched' : 'Background process still running',
+    body: `● ${id} ${what}\n${rest}`.trim(),
+    plain: true,
+    failed: false
+  }
+}
+
+/** The bot chose not to answer (`[SILENT]`, `NO_REPLY`): Hermes keeps the turn but never delivers it. */
+const SILENT_MARKERS = new Set(['[SILENT]', 'SILENT', 'NO_REPLY', 'NO REPLY', '[静默]', '静默', '[沉默]', '沉默'])
+export function isSilentReply(text: string): boolean {
+  const t = text.trim()
+  if (t.length > 64) return false
+  return SILENT_MARKERS.has(t.toUpperCase().replace(/\s+/g, ' ').replace(/^[*_.\s]+|[*_.\s]+$/g, ''))
 }
 
 /** "Subagent Task Completed" → "Subagent task completed". */
